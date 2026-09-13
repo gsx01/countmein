@@ -1,0 +1,65 @@
+# Copy to wrangler.toml (gitignored) and fill in your own values: your D1
+# database ids, your custom domain (or remove the [[routes]] block to use the
+# workers.dev URL), and your public VAPID key + office destination.
+#
+# Secrets are NOT set here - use `wrangler secret put` (see README):
+#   VAPID_PRIVATE_KEY, VAPID_SUBJECT.
+
+name = "countmein"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[assets]
+binding = "ASSETS"
+directory = "./dist/client"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "countmein"
+database_id = "<your-d1-database-id>"
+
+# Optional custom domain. Remove this block to serve from the workers.dev URL.
+[[routes]]
+pattern = "<your-domain>"
+custom_domain = true
+
+# Noon Mon/Thu: trip top-up. Daily 18:00 + 19:00 UTC: the evening-before reminder,
+# gated in handleScheduled to Amsterdam-local 20:00 (one of the two matches per DST
+# season). The daily runs also top-up trips (idempotent), a harmless bonus.
+[triggers]
+crons = ["0 12 * * 1", "0 12 * * 4", "0 18 * * *", "0 19 * * *"]
+
+# Public client config (vars, not secrets). VAPID_PUBLIC_KEY is the public half of
+# your Web Push keypair (keep it in sync with .env). OFFICE_DESTINATION is a JSON
+# string - where auto trips go and the default a manual trip inherits; unset falls
+# back to the placeholder default in src/config.ts.
+[vars]
+VAPID_PUBLIC_KEY = "<your-vapid-public-key>"
+OFFICE_DESTINATION = '{"label":"@Office","lat":52.3791283,"lng":4.899431,"place_id":null,"emoji":"🏢"}'
+
+# Staging / test environment: deploys as `countmein-staging` on the
+# workers.dev URL, with its own D1 database and secrets. `main`,
+# `compatibility_date`, and `[assets]` are inherited from the top level. `routes`
+# and `triggers` ARE inherited too, so they are explicitly cleared here -
+# otherwise staging would steal the production custom domain and run the crons.
+# Vars are NOT inherited, so staging repeats the ones it needs.
+[env.staging]
+routes = []
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "countmein-staging"
+database_id = "<your-staging-d1-database-id>"
+
+[env.staging.triggers]
+crons = []
+
+# Staging has its OWN VAPID keypair. The public key is a plaintext var here and is
+# also injected into the staging client build via `--mode staging` (see
+# .env.staging - keep the two in sync). The private half and subject are Worker
+# secrets set per env: `npx wrangler secret put VAPID_PRIVATE_KEY --env staging`.
+[env.staging.vars]
+VAPID_PUBLIC_KEY = "<your-staging-vapid-public-key>"
+OFFICE_DESTINATION = '{"label":"@Office","lat":52.3791283,"lng":4.899431,"place_id":null,"emoji":"🏢"}'

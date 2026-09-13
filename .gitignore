@@ -1,0 +1,18 @@
+node_modules/
+dist/
+TMP/
+*.tsbuildinfo
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+*.local
+tokens.txt
+.DS_Store
+
+# Local deployment config: real DB ids, custom domain, and Worker vars live here.
+# Copy wrangler.toml.example to wrangler.toml and fill in your own values.
+wrangler.toml
+
+.plan/
