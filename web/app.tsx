@@ -1119,7 +1119,10 @@ function TripRoute({ trip, spots }: { trip: Trip; spots: PickupSpot[] }) {
   // The pin set the map was last fitted to, so the ETA/polyline arriving (which
   // redraws but does not change the pins) does not re-fit and reset a user's pan.
   const fitKeyRef = useRef<string>('');
+  // `shown` latches true on first open so the map/ETA compute once; `open` only
+  // toggles visibility, so closing and reopening never recomputes the route.
   const [shown, setShown] = useState(false);
+  const [open, setOpen] = useState(false);
   const [eta, setEta] = useState<RouteResult | null>(null);
   const [error, setError] = useState(false);
 
@@ -1232,12 +1235,17 @@ function TripRoute({ trip, spots }: { trip: Trip; spots: PickupSpot[] }) {
 
   return (
     <div class="route">
-      {!shown ? (
-        <button class="link" onClick={() => setShown(true)}>
-          Show route &amp; ETA
-        </button>
-      ) : (
-        <>
+      <button
+        class="link"
+        onClick={() => {
+          setShown(true);
+          setOpen((o) => !o);
+        }}
+      >
+        {open ? 'Hide route & ETA' : 'Show route & ETA'}
+      </button>
+      {shown && (
+        <div hidden={!open}>
           <div class="route-map" ref={mapElRef} />
           {error && <p class="route-hint muted">Map unavailable right now.</p>}
           {eta && (
@@ -1262,7 +1270,7 @@ function TripRoute({ trip, spots }: { trip: Trip; spots: PickupSpot[] }) {
               Navigate
             </a>
           )}
-        </>
+        </div>
       )}
     </div>
   );
