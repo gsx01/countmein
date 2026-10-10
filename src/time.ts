@@ -104,6 +104,30 @@ export function localDatePlus(from: Date, days: number): string {
   return ymd(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
 }
 
+// The TIMEZONE wall-clock time (HH:MM) at the given instant.
+export function localHHMM(instant: Date): string {
+  const p = localParts(instant);
+  return `${pad(p.hour)}:${pad(p.minute)}`;
+}
+
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
+const CLOCK_SKEW_MS = 60_000;
+
+// The departure instant to store for a client-reported "I'm leaving" tap, which
+// may arrive late from an offline queue. Missing -> now; a time further ahead
+// than the allowed clock skew -> now. Returns null when the value is not an ISO
+// instant or the result is not on the trip's local date.
+export function clampLeftAt(raw: unknown, tripDate: string, now: Date): Date | null {
+  let leftAt = now;
+  if (raw !== undefined && raw !== null) {
+    if (typeof raw !== 'string' || !ISO_INSTANT.test(raw)) return null;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return null;
+    if (parsed.getTime() <= now.getTime() + CLOCK_SKEW_MS) leftAt = parsed;
+  }
+  return localDateStr(leftAt) === tripDate ? leftAt : null;
+}
+
 export function isLocked(trip: { trip_date: string; etd: string }, now: Date): boolean {
   return now.getTime() >= localInstant(trip.trip_date, trip.etd).getTime();
 }

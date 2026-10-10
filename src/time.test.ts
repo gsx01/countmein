@@ -7,6 +7,8 @@ import {
   localDatePlus,
   localDateStr,
   weekdayOf,
+  localHHMM,
+  clampLeftAt,
 } from './time';
 
 // 2026 Amsterdam DST: CET (UTC+1) until 2026-03-29 01:00 UTC, CEST (UTC+2)
@@ -105,5 +107,68 @@ describe('localDateStr / weekdayOf', () => {
   it('computes ISO weekday of a date', () => {
     expect(weekdayOf('2026-01-05')).toBe(1); // Monday
     expect(weekdayOf('2026-01-08')).toBe(4); // Thursday
+  });
+});
+
+describe('localHHMM', () => {
+  it('formats the Amsterdam wall-clock time', () => {
+    expect(localHHMM(new Date('2026-01-05T06:42:59.000Z'))).toBe('07:42');
+    expect(localHHMM(new Date('2026-07-06T22:05:00.000Z'))).toBe('00:05');
+  });
+});
+
+describe('clampLeftAt', () => {
+  const now = new Date('2026-01-05T08:00:00.000Z');
+  const day = '2026-01-05';
+
+  it('uses now when the value is missing', () => {
+    expect(clampLeftAt(undefined, day, now)).toEqual(now);
+    expect(clampLeftAt(null, day, now)).toEqual(now);
+  });
+
+  it('rejects a value that is not an ISO instant', () => {
+    expect(clampLeftAt('garbage', day, now)).toBeNull();
+    expect(clampLeftAt(1736064000000, day, now)).toBeNull();
+    expect(clampLeftAt('2026-01-05', day, now)).toBeNull();
+    expect(clampLeftAt('2026-01-05T07:00:00', day, now)).toBeNull();
+    expect(clampLeftAt('2026-13-45T07:00:00Z', day, now)).toBeNull();
+  });
+
+  it('keeps a past time on the trip date', () => {
+    expect(clampLeftAt('2026-01-05T06:42:00.000Z', day, now)?.toISOString()).toBe(
+      '2026-01-05T06:42:00.000Z',
+    );
+    expect(clampLeftAt('2026-01-05T07:42:00+01:00', day, now)?.toISOString()).toBe(
+      '2026-01-05T06:42:00.000Z',
+    );
+  });
+
+  it('keeps a future time within the clock skew', () => {
+    expect(clampLeftAt('2026-01-05T08:00:45.000Z', day, now)?.toISOString()).toBe(
+      '2026-01-05T08:00:45.000Z',
+    );
+  });
+
+  it('clamps a future time beyond the clock skew to now', () => {
+    expect(clampLeftAt('2026-01-05T08:05:00.000Z', day, now)).toEqual(now);
+  });
+
+  it('rejects a time on the previous local day', () => {
+    // 22:59Z on the 4th is 23:59 on the 4th in Amsterdam (UTC+1).
+    expect(clampLeftAt('2026-01-04T22:59:00.000Z', day, now)).toBeNull();
+    // 23:30Z on the 4th is already 00:30 on the 5th.
+    expect(clampLeftAt('2026-01-04T23:30:00.000Z', day, now)).not.toBeNull();
+  });
+
+  it('rejects when now itself is not on the trip date', () => {
+    expect(clampLeftAt(undefined, '2026-01-04', now)).toBeNull();
+  });
+
+  it('uses the local date across the autumn DST change', () => {
+    // 2026-10-25 01:00Z ends CEST; 22:30Z on the 24th is 00:30 CEST on the 25th.
+    const dstNow = new Date('2026-10-25T09:00:00.000Z');
+    expect(clampLeftAt('2026-10-24T22:30:00.000Z', '2026-10-25', dstNow)).not.toBeNull();
+    expect(clampLeftAt('2026-10-24T21:30:00.000Z', '2026-10-25', dstNow)).toBeNull();
+    expect(clampLeftAt('2026-10-25T22:59:00.000Z', '2026-10-25', dstNow)).toEqual(dstNow);
   });
 });
