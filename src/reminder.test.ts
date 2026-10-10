@@ -1,7 +1,19 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from './index';
 import { planRecipients, sendReminders } from './reminder';
-import { bytesToB64url } from './push';
+import { bytesToB64url, pushToUsers, type PushPayload } from './push';
+
+// Calls through to the real pushToUsers; the wrapper only records each payload,
+// which is encrypted by the time it reaches fetch.
+vi.mock('./push', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./push')>();
+  return { ...actual, pushToUsers: vi.fn(actual.pushToUsers) };
+});
+
+const payloadsByUser = () =>
+  Object.fromEntries(
+    vi.mocked(pushToUsers).mock.calls.map(([, ids, payload]) => [ids[0], payload as PushPayload]),
+  );
 
 // Valid RFC 8291 subscription keys so encryptPayload runs for real; the routing
 // (who is reminded) is what these tests assert.
@@ -29,9 +41,16 @@ describe('planRecipients', () => {
     expect(only).toEqual([{ id: 1, token: 't1', kind: 'confirm-driver' }]);
   });
 
-  it('omits a driver recipient when the trip has no driver', () => {
-    expect(planRecipients(null, rows).every((r) => r.kind !== 'confirm-driver')).toBe(true);
-    expect(planRecipients(null, rows)).toHaveLength(3);
+  it('sends every rider the no-driver alert, and nothing else, when there is no driver', () => {
+    expect(planRecipients(null, rows)).toEqual([
+      { id: 1, token: 't1', kind: 'no-driver' },
+      { id: 2, token: 't2', kind: 'no-driver' },
+      { id: 3, token: 't3', kind: 'no-driver' },
+    ]);
+  });
+
+  it('plans nobody for a driverless trip with no rider in play', () => {
+    expect(planRecipients(null, [])).toEqual([]);
   });
 });
 
@@ -120,6 +139,9 @@ const endpointsHit = (mock: { mock: { calls: unknown[][] } }) =>
 const now = new Date('2026-09-10T18:00:00.000Z');
 
 describe('sendReminders', () => {
+  beforeEach(() => {
+    vi.mocked(pushToUsers).mockClear();
+  });
   afterEach(() => vi.restoreAllMocks());
 
   it('nudges pending, confirms in + driver, and skips out riders', async () => {
@@ -191,11 +213,17 @@ describe('sendReminders', () => {
     expect(endpointsHit(fetchMock)).toEqual(['https://push.test/in']);
   });
 
-  it('reminds riders even when the trip has no driver', async () => {
+  it('sends only the no-driver alert to in and pending riders of a driverless trip', async () => {
     const { db } = fakeDb({
       trips: [{ id: 9, trip_date: '2026-09-11', driver_id: null }],
-      participants: [{ id: 2, token: 't2', response: 'pending' }],
-      subs: [{ id: 11, user_id: 2, endpoint: 'https://push.test/pending' }],
+      participants: [
+        { id: 2, token: 't2', response: 'in' },
+        { id: 3, token: 't3', response: 'pending' },
+      ],
+      subs: [
+        { id: 11, user_id: 2, endpoint: 'https://push.test/in' },
+        { id: 12, user_id: 3, endpoint: 'https://push.test/pending' },
+      ],
     });
     const env = await vapidEnv(db);
     const fetchMock = vi
@@ -204,6 +232,43 @@ describe('sendReminders', () => {
 
     await sendReminders(env, now);
 
-    expect(endpointsHit(fetchMock)).toEqual(['https://push.test/pending']);
+    expect(endpointsHit(fetchMock)).toEqual(['https://push.test/in', 'https://push.test/pending']);
+    const sent = payloadsByUser();
+    for (const id of [2, 3]) {
+      expect(sent[id]).toMatchObject({
+        title: 'No driver for tomorrow',
+        body: expect.stringMatching(/^Fri 11 Sept? - can you drive\?$/),
+        tag: 'reminder-9',
+      });
+    }
+  });
+
+  it('keeps the usual copy when the trip has a driver', async () => {
+    const { db } = fakeDb({
+      trips: [{ id: 9, trip_date: '2026-09-11', driver_id: 1 }],
+      participants: [
+        { id: 1, token: 't1', response: 'pending' },
+        { id: 2, token: 't2', response: 'in' },
+        { id: 3, token: 't3', response: 'pending' },
+      ],
+      subs: [],
+    });
+    const env = await vapidEnv(db);
+
+    await sendReminders(env, now);
+
+    const sent = payloadsByUser();
+    expect(sent[1]).toMatchObject({
+      title: 'Trip tomorrow',
+      body: expect.stringMatching(/^You're driving - Fri 11 Sept?$/),
+    });
+    expect(sent[2]).toMatchObject({
+      title: 'Trip tomorrow',
+      body: expect.stringMatching(/^You're in - Fri 11 Sept?$/),
+    });
+    expect(sent[3]).toMatchObject({
+      title: 'Trip tomorrow - are you in?',
+      body: expect.stringMatching(/^Fri 11 Sept?$/),
+    });
   });
 });

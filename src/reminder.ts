@@ -1,7 +1,9 @@
 // The evening-before reminder (scheduled push). For each of tomorrow's live
 // trips it nudges the riders still 'pending' ("are you in?") and confirms to the
-// riders already 'in' plus the driver ("you're in / you're driving"). Riders
-// opted 'out', cancelled trips, and trips with nobody in play get nothing.
+// riders already 'in' plus the driver ("you're in / you're driving"). A trip
+// with no driver gets the no-driver alert ("can you drive?") instead, sent to
+// every rider still in play. Riders opted 'out', cancelled trips, and trips with
+// nobody in play get nothing.
 //
 // Once-per-trip: each trip is CLAIMED (reminder_sent_at set) before any send, so
 // a concurrent or retried cron run can never double-send. Best-effort like the
@@ -34,7 +36,7 @@ interface ParticipantRow {
   response: string;
 }
 
-type Kind = 'nudge' | 'confirm-rider' | 'confirm-driver';
+type Kind = 'nudge' | 'confirm-rider' | 'confirm-driver' | 'no-driver';
 
 export interface Recipient {
   id: number;
@@ -46,8 +48,12 @@ export interface Recipient {
 // (hidden) row is dropped from the rider split and the driver is re-added as a
 // confirm recipient regardless of the response on their row (the driver is
 // implicitly in). Riders 'in' get a confirm; everyone else still in play (pending)
-// gets a nudge. Callers pass only non-out rows (the query filters 'out').
+// gets a nudge. Without a driver every row gets the no-driver alert instead.
+// Callers pass only non-out rows (the query filters 'out').
 export function planRecipients(driverId: number | null, rows: ParticipantRow[]): Recipient[] {
+  if (driverId === null) {
+    return rows.map((r) => ({ id: r.id, token: r.token, kind: 'no-driver' }));
+  }
   const recipients: Recipient[] = [];
   for (const r of rows) {
     if (r.id === driverId) continue;
@@ -66,6 +72,8 @@ function copyFor(kind: Kind, day: string): { title: string; body: string } {
       return { title: 'Trip tomorrow', body: `You're in - ${day}` };
     case 'confirm-driver':
       return { title: 'Trip tomorrow', body: `You're driving - ${day}` };
+    case 'no-driver':
+      return { title: 'No driver for tomorrow', body: `${day} - can you drive?` };
   }
 }
 
