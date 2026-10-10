@@ -23,13 +23,13 @@ import {
   setDriver,
   setEtd,
   setLeaving,
-  setMeetup,
   setParticipation,
   setRiderNote,
   setSuggestion,
-  setTripNote,
   updatePrefs,
+  updateTrip,
   updateUser,
+  type TripPatch,
   type UserPatch,
 } from './api-client';
 import { TIMEZONE } from '../src/constants';
@@ -1298,21 +1298,24 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
 
   const run = async (op: () => Promise<AppState>) => {
     setBusy(true);
-    const ok = await apply(op);
+    await apply(op);
     setBusy(false);
-    return ok;
   };
 
-  const suggestMeetup = async (label: string) => {
-    setMeetupValue(label);
-    if (!(await run(() => setMeetup(trip.id, label === '' ? null : label)))) {
-      setMeetupValue(trip.meetup_label ?? '');
-    }
-  };
-
+  const cancelled = trip.status === 'cancelled';
   const etdChanged = etd !== trip.etd;
   const noteChanged = note.trim() !== (trip.note ?? '');
-  const cancelled = trip.status === 'cancelled';
+  // A cancelled trip hides the meetup select, so its draft is never sent.
+  const meetupChanged = !cancelled && meetup !== (trip.meetup_label ?? '');
+
+  // One write for every edited field, so riders get one push listing them all.
+  const save = () => {
+    const fields: TripPatch = {};
+    if (etdChanged) fields.etd = etd;
+    if (meetupChanged) fields.meetup_label = meetup === '' ? null : meetup;
+    if (noteChanged) fields.note = note.trim() === '' ? null : note.trim();
+    void run(() => updateTrip(trip.id, fields));
+  };
 
   const toggleCancelled = async () => {
     await run(() => setCancelled(trip.id, !cancelled));
@@ -1331,17 +1334,29 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
             disabled={busy}
             onInput={(e) => setEtdValue((e.target as HTMLInputElement).value)}
           />
-          <span class="btn-group">
-            <button
-              class="primary"
-              disabled={busy || !etdChanged || etd === ''}
-              onClick={() => void run(() => setEtd(trip.id, etd))}
-            >
-              Save
-            </button>
-          </span>
         </div>
       </div>
+
+      {!cancelled && (
+        <div class="row">
+          <label for={`${id}-meetup`}>Meetup</label>
+          <div class="field">
+            <select
+              id={`${id}-meetup`}
+              value={meetup}
+              disabled={busy}
+              onChange={(e) => setMeetupValue((e.target as HTMLSelectElement).value)}
+            >
+              <option value="">None</option>
+              {spots.map((s) => (
+                <option key={s.label} value={s.label}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       <div class="row">
         <label for={`${id}-note`}>Trip note</label>
@@ -1356,36 +1371,18 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
             placeholder="Visible to everyone"
             onInput={(e) => setNote((e.target as HTMLInputElement).value)}
           />
-          <button
-            class="primary"
-            disabled={busy || !noteChanged}
-            onClick={() => void run(() => setTripNote(trip.id, note.trim() === '' ? null : note.trim()))}
-          >
-            Save note
-          </button>
         </div>
       </div>
 
-      {!cancelled && (
-        <div class="row">
-          <label for={`${id}-meetup`}>Meetup</label>
-          <div class="field">
-            <select
-              id={`${id}-meetup`}
-              value={meetup}
-              disabled={busy}
-              onChange={(e) => void suggestMeetup((e.target as HTMLSelectElement).value)}
-            >
-              <option value="">None</option>
-              {spots.map((s) => (
-                <option key={s.label} value={s.label}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
+      <div class="actions">
+        <button
+          class="primary"
+          disabled={busy || !(etdChanged || meetupChanged || noteChanged) || etd === ''}
+          onClick={save}
+        >
+          Save changes
+        </button>
+      </div>
 
       <div class="row">
         <label>Destination</label>

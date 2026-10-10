@@ -69,7 +69,10 @@ async function expectFullPrompt(page: Page, label: string) {
 }
 
 async function setMeetupAsDriver(page: Page, value: string) {
-  await write(page, `/api/trips/${T}/meetup`, () => meetupSelect(page).selectOption(value));
+  await meetupSelect(page).selectOption(value);
+  await write(page, `/api/trips/${T}`, () =>
+    card(page, T).getByRole('button', { name: 'Save changes', exact: true }).click(),
+  );
   await pause(page);
 }
 

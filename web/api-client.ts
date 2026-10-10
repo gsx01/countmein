@@ -131,6 +131,16 @@ export const setParticipation = (
     body: JSON.stringify({ response, pickup_spot }),
   });
 
+export interface TripPatch {
+  etd?: string;
+  meetup_label?: string | null;
+  note?: string | null;
+}
+
+// The driver's trip settings in one write; fields left out keep their value.
+export const updateTrip = (tripId: number, fields: TripPatch) =>
+  call(`/trips/${tripId}`, { method: 'PATCH', body: JSON.stringify(fields) });
+
 export const setEtd = (tripId: number, etd: string) =>
   call(`/trips/${tripId}/etd`, {
     method: 'POST',
@@ -141,12 +151,6 @@ export const setSuggestion = (tripId: number, suggested_etd: string | null) =>
   call(`/trips/${tripId}/suggestion`, {
     method: 'POST',
     body: JSON.stringify({ suggested_etd }),
-  });
-
-export const setTripNote = (tripId: number, note: string | null) =>
-  call(`/trips/${tripId}/trip-note`, {
-    method: 'POST',
-    body: JSON.stringify({ note }),
   });
 
 export const setRiderNote = (tripId: number, note: string | null) =>
@@ -187,13 +191,6 @@ export const setDestination = (tripId: number, destination: DestinationInput | n
   call(`/trips/${tripId}/destination`, {
     method: 'POST',
     body: JSON.stringify({ destination }),
-  });
-
-// The driver suggests a meetup spot (a pickup label), or null to clear it.
-export const setMeetup = (tripId: number, label: string | null) =>
-  call(`/trips/${tripId}/meetup`, {
-    method: 'POST',
-    body: JSON.stringify({ label }),
   });
 
 // An "in" rider keeps their own spot instead of the driver's meetup suggestion.

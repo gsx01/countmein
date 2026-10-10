@@ -70,13 +70,38 @@ test('the driver changes the ETD and a refreshed rider sees it', async ({ page, 
     .locator('.row')
     .filter({ has: page.locator('label', { hasText: /^Leaves$/ }) });
   await leaves.locator('input[type="time"]').fill('07:15');
-  await write(page, `/api/trips/${T}/etd`, () =>
-    leaves.getByRole('button', { name: 'Save', exact: true }).click(),
+  await write(page, `/api/trips/${T}`, () =>
+    card(page, T).getByRole('button', { name: 'Save changes', exact: true }).click(),
   );
   await expect(card(page, T).locator('.etd')).toHaveText('Leaves 07:15');
 
   await forceRefresh(riderPage);
   await expect(card(riderPage, T).locator('.etd')).toHaveText('Leaves 07:15');
+});
+
+test('the driver saves several settings in one write', async ({ page }) => {
+  const save = card(page, T).getByRole('button', { name: 'Save changes', exact: true });
+  const field = (label: string) =>
+    card(page, T)
+      .locator('.row')
+      .filter({ has: page.locator('label', { hasText: new RegExp(`^${label}$`) }) });
+  await as(page, 'driver', T, 'edit ETD, meetup and note, then save once');
+  await expect(save).toBeDisabled();
+  await field('Leaves').locator('input[type="time"]').fill('07:45');
+  await field('Meetup').locator('select').selectOption(USERS.rider.label);
+  await field('Trip note').locator('input').fill('  bring snacks ');
+  const patches: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'PATCH') patches.push(r.url());
+  });
+  await write(page, `/api/trips/${T}`, () => save.click());
+  await expect(save).toBeDisabled();
+  expect(patches).toHaveLength(1);
+  expect(await apiTrip('driver', T)).toMatchObject({
+    etd: '07:45',
+    meetup_label: USERS.rider.label,
+    note: 'bring snacks',
+  });
 });
 
 test('the driver confirms before cancelling, then restores', async ({ page }) => {

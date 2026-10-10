@@ -68,7 +68,7 @@ async function busy(): Promise<void> {
     pickup_label: '@Station-Zuid-WTC',
   });
   await apiCall('driver', 'POST', `/trips/${TODAY}/leaving`);
-  await apiCall('driver', 'POST', `/trips/${SOON}/trip-note`, {
+  await apiCall('driver', 'PATCH', `/trips/${SOON}`, {
     note: 'Parking at the back entrance, gate code 4412. Bring a jacket, the car heater is broken.',
   });
   await apiCall('rider', 'POST', `/trips/${SOON}/suggestion`, { suggested_etd: '07:30' });
