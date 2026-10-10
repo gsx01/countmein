@@ -86,6 +86,8 @@ function formatDataAt(iso: string): string {
 
 const isNetworkError = (err: unknown) => err instanceof ApiError && err.status === 0;
 
+const LEAVE_RETRY_MS = [15_000, 30_000, 60_000];
+
 const leaveQueue = createLeaveQueue(
   {
     getItem: (key) => localStorage.getItem(key),
@@ -171,8 +173,13 @@ export function App() {
     [receive],
   );
 
-  const [queuedLeaves, setQueuedLeaves] = useState(() => leaveQueue.entries());
+  const [queuedLeaves, setQueuedLeaves] = useState(() => {
+    leaveQueue.prune(localToday());
+    return leaveQueue.entries();
+  });
   const flushing = useRef(false);
+  // Consecutive flushes that left an entry to retry; drives the backoff timer.
+  const [retryAttempt, setRetryAttempt] = useState(0);
 
   // Sends every queued "I'm leaving" tap with its tap time. An entry leaves the
   // queue once it landed (or an earlier attempt did) or can never land; network
@@ -181,6 +188,7 @@ export function App() {
     if (flushing.current) return;
     flushing.current = true;
     const tried = new Set<number>();
+    let retrying = false;
     try {
       for (;;) {
         const entry = leaveQueue.entries().find((e) => !tried.has(e.tripId));
@@ -195,6 +203,7 @@ export function App() {
           const message = err instanceof Error ? err.message : 'error';
           const outcome = classify(status, message);
           if (outcome === 'retry') {
+            retrying = true;
             if (status === 0 && dataAt.current) setOfflineDataAt(dataAt.current);
             continue;
           }
@@ -207,8 +216,27 @@ export function App() {
     } finally {
       flushing.current = false;
       if (tried.size > 0) setQueuedLeaves(leaveQueue.entries());
+      setRetryAttempt((n) => (retrying ? n + 1 : 0));
     }
   }, [receive, refresh]);
+
+  useEffect(() => {
+    if (retryAttempt === 0) return;
+    const delay = LEAVE_RETRY_MS[Math.min(retryAttempt, LEAVE_RETRY_MS.length) - 1];
+    const timer = setTimeout(() => void flushLeaves(), delay);
+    return () => clearTimeout(timer);
+  }, [retryAttempt, flushLeaves]);
+
+  useEffect(() => {
+    const onOnline = () => void flushLeaves();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [flushLeaves]);
+
+  const resume = useCallback(async () => {
+    await flushLeaves();
+    return refresh();
+  }, [flushLeaves, refresh]);
 
   // The tap is stored before any network call, so it survives no connection.
   const leave = useCallback(
@@ -230,10 +258,11 @@ export function App() {
       setLoading(false);
       return;
     }
-    void load();
-  }, [load]);
+    // After the load, so an older in-flight state can't overwrite the sent one.
+    void load().then(flushLeaves);
+  }, [load, flushLeaves]);
 
-  useResumeRefresh(refresh, lastFetchAt, state !== null && !authError);
+  useResumeRefresh(resume, lastFetchAt, state !== null && !authError);
 
   if (authError) {
     return (
@@ -271,7 +300,7 @@ export function App() {
       {offlineDataAt && (
         <div class="banner">
           <span>Offline - data from {formatDataAt(offlineDataAt)}</span>
-          <button onClick={() => void refresh()}>Retry</button>
+          <button onClick={() => void resume()}>Retry</button>
         </div>
       )}
 
