@@ -10,13 +10,18 @@ import type { NotifyCategory } from './types';
 import { pushToUsers, type PushPayload } from './push';
 import { localHHMM } from './time';
 
-export type NotifyAction =
+// The driver's trip settings that one PATCH can change together.
+export type TripUpdate =
   | { kind: 'etd'; etd: string }
+  | { kind: 'meetup'; label: string }
+  | { kind: 'trip-note'; note: string | null };
+
+export type NotifyAction =
+  | TripUpdate
+  | { kind: 'trip-update'; changes: TripUpdate[] }
   | { kind: 'cancel'; cancelled: boolean }
-  | { kind: 'trip-note'; note: string | null }
   | { kind: 'driver'; previous: number | null; driverName: string | null }
   | { kind: 'leaving'; leftAt: string }
-  | { kind: 'meetup'; label: string }
   | { kind: 'participation'; response: 'in' | 'out'; spot: string | null }
   | { kind: 'suggestion'; suggested: string | null }
   | { kind: 'rider-note'; note: string | null };
@@ -25,6 +30,7 @@ export type NotifyAction =
 // action fans out to the non-out riders; a rider action notifies the driver.
 const isDriverAction = (kind: NotifyAction['kind']) =>
   kind === 'etd' ||
+  kind === 'trip-update' ||
   kind === 'cancel' ||
   kind === 'trip-note' ||
   kind === 'driver' ||
@@ -35,6 +41,7 @@ const isDriverAction = (kind: NotifyAction['kind']) =>
 // routing and pref-filtering can't drift (the reminder owns 'evening_reminder').
 const CATEGORY_BY_KIND: Record<NotifyAction['kind'], NotifyCategory> = {
   etd: 'driver_updates',
+  'trip-update': 'driver_updates',
   cancel: 'driver_updates',
   'trip-note': 'driver_updates',
   driver: 'driver_assignment',
@@ -79,6 +86,17 @@ const preview = (note: string) =>
 // names the tap time instead of claiming the driver leaves now.
 const LATE_LEAVING_MS = 2 * 60_000;
 
+function updateLine(change: TripUpdate): string {
+  switch (change.kind) {
+    case 'etd':
+      return `leaves ${change.etd}`;
+    case 'meetup':
+      return `meet at ${change.label}`;
+    case 'trip-note':
+      return change.note ? `note: ${preview(change.note)}` : 'note cleared';
+  }
+}
+
 export function copyFor(
   actor: User,
   day: string,
@@ -88,6 +106,12 @@ export function copyFor(
   switch (action.kind) {
     case 'etd':
       return { title: `${day} - ETD now ${action.etd}`, body: actor.name };
+    // A lone change reads exactly as its own push; several share one line each.
+    case 'trip-update': {
+      if (action.changes.length === 1) return copyFor(actor, day, action.changes[0], now);
+      const body = action.changes.map(updateLine).join(' - ');
+      return { title: `${day} - trip updated`, body: body.charAt(0).toUpperCase() + body.slice(1) };
+    }
     case 'cancel':
       return {
         title: action.cancelled ? `${day} trip cancelled` : `${day} trip back on`,

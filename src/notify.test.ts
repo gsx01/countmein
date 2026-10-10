@@ -335,6 +335,43 @@ describe('meetup suggestion', () => {
   });
 });
 
+describe('trip update copy', () => {
+  it('reads a lone change exactly as its own push', () => {
+    const etd = { kind: 'etd', etd: '07:45' } as const;
+    expect(copyFor(alice, 'Mon 5 Jan', { kind: 'trip-update', changes: [etd] })).toEqual(
+      copyFor(alice, 'Mon 5 Jan', etd),
+    );
+  });
+
+  it('lists several changes in one body', () => {
+    expect(
+      copyFor(alice, 'Mon 5 Jan', {
+        kind: 'trip-update',
+        changes: [
+          { kind: 'etd', etd: '07:45' },
+          { kind: 'meetup', label: '@Bob' },
+          { kind: 'trip-note', note: 'bring snacks' },
+        ],
+      }),
+    ).toEqual({
+      title: 'Mon 5 Jan - trip updated',
+      body: 'Leaves 07:45 - meet at @Bob - note: bring snacks',
+    });
+  });
+
+  it('says a cleared note was cleared', () => {
+    expect(
+      copyFor(alice, 'Mon 5 Jan', {
+        kind: 'trip-update',
+        changes: [
+          { kind: 'trip-note', note: null },
+          { kind: 'etd', etd: '07:45' },
+        ],
+      }).body,
+    ).toBe('Note cleared - leaves 07:45');
+  });
+});
+
 describe('leaving copy', () => {
   const now = new Date('2026-01-05T07:00:00.000Z');
 
