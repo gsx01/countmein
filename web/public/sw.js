@@ -5,15 +5,30 @@
 // tag (trip-<id>) so a newer one replaces the older in the tray instead of
 // stacking, without re-alerting (renotify off).
 
-const SHELL_CACHE = 'countmein-shell-v1';
+const SHELL_CACHE = 'countmein-shell-v2';
 const SHELL_URL = '/';
+const ASSET_PREFIX = '/assets/';
+
+// Stores the shell HTML plus the hashed bundle it references, and drops bundles
+// from older builds. Assets are served `max-age=0, must-revalidate`, so without
+// this an offline launch gets the HTML but no JS.
+async function cacheShell(cache, response) {
+  const html = await response.clone().text();
+  await cache.put(SHELL_URL, response);
+  const wanted = new Set(html.match(/\/assets\/[^"'\s)]+/g) || []);
+  await cache.addAll([...wanted]);
+  for (const req of await cache.keys()) {
+    const path = new URL(req.url).pathname;
+    if (path.startsWith(ASSET_PREFIX) && !wanted.has(path)) await cache.delete(req);
+  }
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(SHELL_CACHE)
-      .then((cache) => cache.add(SHELL_URL))
-      .catch(() => {}),
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE);
+      await cacheShell(cache, await fetch(SHELL_URL));
+    })().catch(() => {}),
   );
   self.skipWaiting();
 });
@@ -29,16 +44,29 @@ self.addEventListener('activate', (event) => {
 });
 
 // Network-first for page navigations, falling back to the cached shell offline.
-// Everything else (API calls, hashed assets) goes straight to the network.
+// Hashed assets are cache-first (a hash never changes content). Everything else
+// (API calls, icons) goes straight to the network.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+  const url = new URL(req.url);
+  if (req.method === 'GET' && url.origin === self.location.origin && url.pathname.startsWith(ASSET_PREFIX)) {
+    event.respondWith(
+      (async () => {
+        const cached = await caches.match(req, { ignoreSearch: true });
+        return cached || fetch(req);
+      })(),
+    );
+    return;
+  }
   if (req.mode !== 'navigate') return;
   event.respondWith(
     (async () => {
       try {
         const fresh = await fetch(req);
-        const cache = await caches.open(SHELL_CACHE);
-        cache.put(SHELL_URL, fresh.clone());
+        if (fresh.ok) {
+          const cache = await caches.open(SHELL_CACHE);
+          event.waitUntil(cacheShell(cache, fresh.clone()).catch(() => {}));
+        }
         return fresh;
       } catch (_e) {
         const cached = await caches.match(SHELL_URL);
