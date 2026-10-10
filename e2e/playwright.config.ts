@@ -12,8 +12,9 @@ const serve = [
 ].join(' && ');
 
 // iPhone descriptors default to WebKit; only the viewport, scale, UA and touch
-// matter for a layout check, so every device runs on Chromium.
-const SHOT_DEVICES = ['iPhone SE', 'iPhone 15', 'Pixel 7'];
+// matter for a layout check, so every device runs on Chromium. The desktop
+// profile covers the side-label layout and a fine pointer.
+const SHOT_DEVICES = ['iPhone SE', 'iPhone 15', 'Pixel 7', 'Desktop Chrome'];
 
 export default defineConfig({
   testDir: '.',
