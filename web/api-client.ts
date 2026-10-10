@@ -167,10 +167,13 @@ export const setDriver = (tripId: number, driver_id: number | null) =>
     body: JSON.stringify({ driver_id }),
   });
 
-// The driver signals departure (one-shot per trip). Body-less; works even after
-// the trip locks.
-export const setLeaving = (tripId: number) =>
-  call(`/trips/${tripId}/leaving`, { method: 'POST' });
+// The driver signals departure (one-shot per trip); works even after the trip
+// locks. `leftAt` is the tap time of a queued tap; without it the server uses now.
+export const setLeaving = (tripId: number, leftAt?: string) =>
+  call(`/trips/${tripId}/leaving`, {
+    method: 'POST',
+    body: leftAt === undefined ? undefined : JSON.stringify({ left_at: leftAt }),
+  });
 
 export interface DestinationInput {
   label: string;
