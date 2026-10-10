@@ -52,10 +52,29 @@ Open a URL printed by `npm run seed` (`http://localhost:5173/?t=...`).
 ## Checks
 
 ```sh
-npm run typecheck            # worker + web
-npm test                     # vitest
+npm run typecheck            # worker + web + tests
+npm test                     # vitest: unit + API integration
 npm run build                # production build
 ```
+
+## Testing
+
+`npm test` runs the unit tests and the API integration tests (`test/api/`,
+inside the Workers runtime on a local D1). Both use inline test config, so they
+need no `wrangler.toml` or `.env`.
+
+The browser end-to-end suite (`e2e/`) runs only locally, never against a
+deployed Worker:
+
+```sh
+npx playwright install chromium   # once
+npm run e2e                       # build, migrate, serve on :8788, run Playwright
+npm run e2e:video                 # same, plus one video per test in e2e/videos/
+```
+
+It serves its own Worker config (`e2e/wrangler.e2e.toml`) with a separate D1 in
+`e2e/.state`, sends no pushes and loads no Google Maps. If the bundled Chromium
+won't start, use an installed Chrome with `PW_CHANNEL=chrome-dev` (or `chrome`).
 
 ## Deploy
 

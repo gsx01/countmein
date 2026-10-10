@@ -43,6 +43,13 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
   the ETA and pin order.
 - `migrations/` (`0001_init.sql` .. `0015_meetup.sql`), `scripts/seed.mjs`,
   `scripts/gen-vapid.mjs`.
+- Unit tests sit next to the code (`src/*.test.ts`, `web/*.test.ts`: node, fake
+  DB). `test/api/` holds the API integration tests: `handleApi` called directly
+  inside workerd (`@cloudflare/vitest-plugin`) on a real D1 with every migration,
+  reset before each test (`setup.ts`); fixtures and the push spy in `helpers.ts`.
+- `e2e/` holds the Playwright suite (`*.spec.ts`, `fixtures.ts`) and its own
+  Worker config `wrangler.e2e.toml` (office `@TestOffice`, no secrets, no Maps
+  key). E2E runs only locally, never against staging or production.
 
 ## Key invariants
 
@@ -138,7 +145,14 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
 
 - `npm run dev` - Vite + Worker. (`/api/*` may not route under `vite dev` in some
   setups; use `npx wrangler dev` against a build to exercise the API/push routes.)
-- `npm test` / `npm run typecheck` / `npm run build`.
+- `npm test` (unit + API integration) / `npm run typecheck` (worker, web, test)
+  / `npm run build`. Neither test layer reads `wrangler.toml` or `.env`.
+- `npm run e2e` - Playwright against a local `wrangler dev` on port 8788 with
+  its own D1 in `e2e/.state`; it first runs `vite build --mode e2e` (which
+  overwrites `dist/client`) and the local migrations. Each test resets the data
+  with `wrangler d1 execute --local`. `npm run e2e:video` records one video per
+  test into `e2e/videos/`. One-time setup: `npx playwright install chromium`. If
+  the bundled Chromium won't start (Windows N), set `PW_CHANNEL=chrome-dev`.
 - `npx wrangler d1 migrations apply countmein --local` then `npm run seed`.
 - `node scripts/gen-vapid.mjs` prints a VAPID pair (see the script for wiring).
 - Cron locally: `npx wrangler dev --test-scheduled`, then
