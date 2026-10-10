@@ -7,6 +7,7 @@ import type { Env } from './index';
 import type { User } from './db';
 import type { NotifyCategory } from './types';
 import { pushToUsers, type PushPayload } from './push';
+import { localHHMM } from './time';
 
 export type NotifyAction =
   | { kind: 'etd'; etd: string }
@@ -70,7 +71,16 @@ const NOTE_PREVIEW = 120;
 const preview = (note: string) =>
   note.length > NOTE_PREVIEW ? `${note.slice(0, NOTE_PREVIEW - 1)}...` : note;
 
-function copyFor(actor: User, day: string, action: NotifyAction): { title: string; body: string } {
+// A leaving push sent this long after the tap (an offline queue flushing late)
+// names the tap time instead of claiming the driver leaves now.
+const LATE_LEAVING_MS = 2 * 60_000;
+
+export function copyFor(
+  actor: User,
+  day: string,
+  action: NotifyAction,
+  now = new Date(),
+): { title: string; body: string } {
   switch (action.kind) {
     case 'etd':
       return { title: `${day} - ETD now ${action.etd}`, body: actor.name };
@@ -87,8 +97,12 @@ function copyFor(actor: User, day: string, action: NotifyAction): { title: strin
       return action.driverName
         ? { title: `${day} - ${action.driverName} is driving`, body: '' }
         : { title: `${day} - no driver yet`, body: '' };
-    case 'leaving':
-      return { title: 'Driver is leaving now', body: day };
+    case 'leaving': {
+      const leftAt = new Date(action.leftAt);
+      return now.getTime() - leftAt.getTime() > LATE_LEAVING_MS
+        ? { title: `Driver left at ${localHHMM(leftAt)}`, body: day }
+        : { title: 'Driver is leaving now', body: day };
+    }
     case 'participation':
       return action.response === 'in'
         ? { title: `${actor.name} is in`, body: `${day}, pickup ${action.spot}` }

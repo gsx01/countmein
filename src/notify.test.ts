@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from './index';
 import type { User } from './db';
-import { notifyChange } from './notify';
+import { copyFor, notifyChange } from './notify';
 import { bytesToB64url } from './push';
 
 // Valid subscription keys (the RFC 8291 user-agent key/secret) so encryptPayload
@@ -264,5 +264,25 @@ describe('notifyChange routing', () => {
     await notifyChange(env, alice, noDriver, { kind: 'cancel', cancelled: true });
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('leaving copy', () => {
+  const now = new Date('2026-01-05T07:00:00.000Z');
+
+  it('says "leaving now" for a fresh tap', () => {
+    const leftAt = new Date(now.getTime() - 90_000).toISOString();
+    expect(copyFor(alice, 'Mon 5 Jan', { kind: 'leaving', leftAt }, now)).toEqual({
+      title: 'Driver is leaving now',
+      body: 'Mon 5 Jan',
+    });
+  });
+
+  it('names the Amsterdam tap time for a late send', () => {
+    const leftAt = '2026-01-05T06:42:00.000Z';
+    expect(copyFor(alice, 'Mon 5 Jan', { kind: 'leaving', leftAt }, now)).toEqual({
+      title: 'Driver left at 07:42',
+      body: 'Mon 5 Jan',
+    });
   });
 });
