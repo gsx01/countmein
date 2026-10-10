@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type {
   AdminUser,
@@ -395,7 +396,7 @@ function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<bo
   };
 
   return (
-    <section class="card add-trip-form">
+    <Panel class="add-trip-form" title="Add a one-off trip" onClose={() => setOpen(false)}>
       <div class="row">
         <label>Date</label>
         <div class="field">
@@ -426,10 +427,33 @@ function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<bo
         >
           Add trip
         </button>
-        <button disabled={busy} onClick={() => setOpen(false)}>
-          Cancel
+      </div>
+    </Panel>
+  );
+}
+
+// The shared frame of the panels opened from the links under the trips: a card
+// with a heading and its Close control in the same place.
+function Panel({
+  class: cls,
+  title,
+  onClose,
+  children,
+}: {
+  class: string;
+  title: string;
+  onClose: () => void;
+  children: ComponentChildren;
+}) {
+  return (
+    <section class={`card panel ${cls}`}>
+      <div class="panel-head">
+        <h2>{title}</h2>
+        <button class="link" onClick={onClose}>
+          Close
         </button>
       </div>
+      {children}
     </section>
   );
 }
@@ -479,13 +503,7 @@ function AdminPanel({ onState }: { onState: (s: AppState) => void }) {
   }
 
   return (
-    <section class="card admin">
-      <div class="admin-head">
-        <h2>Users</h2>
-        <button class="link" onClick={() => setOpen(false)}>
-          Close
-        </button>
-      </div>
+    <Panel class="admin" title="Users" onClose={() => setOpen(false)}>
       {error && <p class="admin-error">{error}</p>}
       {users === null ? (
         <p class="admin-loading">Loading...</p>
@@ -499,7 +517,7 @@ function AdminPanel({ onState }: { onState: (s: AppState) => void }) {
           <AddUser busy={busy} run={run} />
         </>
       )}
-    </section>
+    </Panel>
   );
 }
 
@@ -780,8 +798,7 @@ function NotifySettings({
   };
 
   return (
-    <div class="prefs">
-      <h2>Notification settings</h2>
+    <Panel class="prefs" title="Notification settings" onClose={() => setOpen(false)}>
       {PREF_ROWS.map(({ key, label }) => (
         <label key={key} class="pref-row">
           <input
@@ -793,10 +810,7 @@ function NotifySettings({
           <span>{label}</span>
         </label>
       ))}
-      <button class="link" onClick={() => setOpen(false)}>
-        Done
-      </button>
-    </div>
+    </Panel>
   );
 }
 

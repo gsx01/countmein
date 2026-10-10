@@ -156,18 +156,42 @@ header.app .who {
   gap: 6px;
 }
 
+/* The links that open the panels: stacked, centred, each a full-height target. */
 .add-trip {
   display: block;
-  margin: 4px auto 0;
+  margin: 0 auto;
+  min-height: 44px;
 }
 
-.prefs {
-  margin-top: 24px;
+main > .add-trip + .card {
+  margin-top: 14px;
 }
 
-.prefs h2 {
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-head h2 {
   font-size: 16px;
-  margin: 0 0 8px;
+  margin: 0;
+}
+
+/* The pref rows carry their own vertical padding. */
+.prefs.panel {
+  gap: 0;
+}
+
+.prefs .panel-head {
+  margin-bottom: 6px;
 }
 
 .pref-row {
@@ -181,12 +205,6 @@ header.app .who {
 .pref-row input[type='checkbox'] {
   height: auto;
   flex: 0 0 auto;
-}
-
-.add-trip-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 /* The one-off trip's native date/time pickers: a box matching the other controls
@@ -462,30 +480,15 @@ button:disabled {
   cursor: pointer;
 }
 
-.admin {
-  margin-top: 24px;
-}
-
-.admin-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.admin-head h2 {
-  font-size: 16px;
-  margin: 0;
-}
-
 .admin-error {
   color: var(--danger);
   font-size: 14px;
-  margin: 0 0 12px;
+  margin: 0;
 }
 
 .admin-loading {
   color: var(--muted);
+  margin: 0;
 }
 
 .admin-users {
@@ -500,6 +503,11 @@ button:disabled {
   gap: 12px;
   padding: 14px 0;
   border-top: 1px solid var(--border);
+}
+
+/* The panel's own gap follows the list, so the last row needs little padding. */
+.admin-user:last-child {
+  padding-bottom: 2px;
 }
 
 .admin-user.disabled {
@@ -523,7 +531,6 @@ button:disabled {
   flex-direction: column;
   gap: 12px;
   border-top: 1px solid var(--border);
-  margin-top: 8px;
   padding-top: 14px;
 }
 
