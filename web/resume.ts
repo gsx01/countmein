@@ -15,12 +15,13 @@ export interface RefreshOptions {
 
 // Silently refetches when the app is shown again (tab/app switch, bfcache
 // restore), when the connection returns, and every 60s while visible. Inert until
-// `enabled`. Returns the throttled trigger for callers with their own reasons.
+// `enabled`. Returns the throttled trigger for callers with their own reasons; it
+// settles once the refresh it started (if any) has.
 export function useResumeRefresh(
   refresh: () => unknown,
   lastFetchAt: { readonly current: number },
   enabled: boolean,
-): (opts?: RefreshOptions) => void {
+): (opts?: RefreshOptions) => Promise<void> {
   const refreshRef = useRef(refresh);
 
   useEffect(() => {
@@ -28,9 +29,9 @@ export function useResumeRefresh(
   });
 
   const trigger = useCallback(
-    (opts?: RefreshOptions) => {
+    async (opts?: RefreshOptions) => {
       if (opts?.force || shouldFetch(Date.now(), lastFetchAt.current, MIN_GAP_MS)) {
-        void refreshRef.current();
+        await refreshRef.current();
       }
     },
     [lastFetchAt],
@@ -39,12 +40,12 @@ export function useResumeRefresh(
   useEffect(() => {
     if (!enabled) return;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') trigger();
+      if (document.visibilityState === 'visible') void trigger();
     };
     const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) trigger();
+      if (e.persisted) void trigger();
     };
-    const onOnline = () => trigger();
+    const onOnline = () => void trigger();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('pageshow', onPageShow);
     window.addEventListener('online', onOnline);

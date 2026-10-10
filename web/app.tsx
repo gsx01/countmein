@@ -52,6 +52,7 @@ import {
   pushSupported,
 } from './push-client';
 import { useResumeRefresh } from './resume';
+import { tripAnchor, tripIdFromHash } from './trip-anchor';
 import { loadCachedState, saveState } from './state-cache';
 import { classify, createLeaveQueue, type LeaveEntry } from './leave-queue';
 
@@ -254,6 +255,10 @@ export function App() {
     [flushLeaves],
   );
 
+  // The trip card a push link points at; a fresh object per request so the same
+  // trip can be scrolled to again.
+  const [scrollTarget, setScrollTarget] = useState<{ tripId: number } | null>(null);
+
   useEffect(() => {
     if (!hasToken()) {
       setAuthError(true);
@@ -261,10 +266,31 @@ export function App() {
       return;
     }
     // After the load, so an older in-flight state can't overwrite the sent one.
-    void load().then(flushLeaves);
+    void load().then(() => {
+      const tripId = tripIdFromHash(location.hash);
+      if (tripId !== null) setScrollTarget({ tripId });
+      return flushLeaves();
+    });
   }, [load, flushLeaves]);
 
-  useResumeRefresh(resume, lastFetchAt, state !== null && !authError);
+  const resumeRefresh = useResumeRefresh(resume, lastFetchAt, state !== null && !authError);
+
+  // A push tapped while the app is open navigates only the hash, which reloads
+  // nothing, so fetch fresh data before landing on the card.
+  useEffect(() => {
+    const onHashChange = () => {
+      const tripId = tripIdFromHash(location.hash);
+      if (tripId === null) return;
+      void resumeRefresh({ force: true }).then(() => setScrollTarget({ tripId }));
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [resumeRefresh]);
+
+  useEffect(() => {
+    if (!scrollTarget || loading) return;
+    document.getElementById(tripAnchor(scrollTarget.tripId))?.scrollIntoView({ block: 'start' });
+  }, [scrollTarget, loading]);
 
   if (authError) {
     return (
@@ -859,7 +885,11 @@ function TripCard({ trip, me, spots, apply, offline, pendingLeave, onLeave }: Tr
   // Truthy check: a state cached before the meetup feature has no such field.
   const meetup = !cancelled && trip.meetup_label ? trip.meetup_label : null;
   return (
-    <section class={`card${cancelled ? ' cancelled' : ''}`} data-trip-id={trip.id}>
+    <section
+      class={`card${cancelled ? ' cancelled' : ''}`}
+      id={tripAnchor(trip.id)}
+      data-trip-id={trip.id}
+    >
       <div class="top">
         <span class="date">{formatDate(trip.trip_date)}</span>
         <span class="badges">
