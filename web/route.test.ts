@@ -87,6 +87,23 @@ describe('routePoints', () => {
     const points = routePoints(trip, spots);
     expect(points.pickups.map((p) => p.label)).toEqual(['@East', '@West']);
   });
+
+  it('makes one stop of riders who accepted the same meetup spot', () => {
+    const spots = [spot('@East', 0.8), spot('@West', 0.2)];
+    const trip = {
+      ...base,
+      driver: { id: 9, name: 'Driver', address: 'x', lat: 0, lng: 0 },
+      destination: { label: 'Office', lat: 0, lng: 1, place_id: null },
+      meetup_label: '@West',
+      riders: [
+        { id: 1, name: 'A', response: 'in', pickup_spot: '@West', suggested_etd: null, note: null },
+        { id: 2, name: 'B', response: 'in', pickup_spot: '@West', suggested_etd: null, note: null },
+        { id: 3, name: 'C', response: 'in', pickup_spot: '@East', suggested_etd: null, note: null },
+      ],
+    } as unknown as Trip;
+    const points = routePoints(trip, spots);
+    expect(points.pickups.map((p) => p.label)).toEqual(['@West', '@East']);
+  });
 });
 
 describe('routeKey', () => {
