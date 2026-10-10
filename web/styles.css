@@ -203,7 +203,9 @@ main > .add-trip + .card {
 }
 
 .pref-row input[type='checkbox'] {
-  height: auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
   flex: 0 0 auto;
 }
 
@@ -264,10 +266,11 @@ main > .add-trip + .card {
   gap: 6px;
 }
 
-.rider-meta .suggestion button.link {
-  padding: 0 2px;
-  height: auto;
-  min-width: 0;
+/* Right-aligned contexts: a short link's text sits at the right of its box. */
+.rider-meta button.link,
+.panel-head button.link,
+header.app .push {
+  text-align: right;
 }
 
 .rider-meta .meetup-status {
@@ -440,13 +443,46 @@ div.leaving {
   margin-bottom: 12px;
 }
 
+/* No side padding, so link text lines up with the text around it; the min-width
+   keeps a short link ("Apply", "Close") a 44px-wide target. */
 button.link {
   height: auto;
-  min-width: 0;
-  padding: 0 4px;
+  min-width: 44px;
+  padding: 0;
+  text-align: left;
   background: none;
   border: none;
   color: var(--accent);
+}
+
+/* Touch screens: 44px-tall targets (Apple HIG) for every control and link. */
+@media (pointer: coarse) {
+  button,
+  select,
+  input[type='date'],
+  input[type='time'],
+  input[type='text'] {
+    height: 44px;
+  }
+
+  button.link {
+    min-height: 44px;
+  }
+
+  .field {
+    min-height: 44px;
+  }
+
+  .pref-row {
+    min-height: 44px;
+    padding: 0;
+  }
+}
+
+@media (pointer: coarse) and (min-width: 480px) {
+  .row > label {
+    padding: 12px 0;
+  }
 }
 
 button:disabled {
@@ -587,6 +623,12 @@ button:disabled {
   color: var(--accent-text);
   font-weight: 600;
   text-decoration: none;
+}
+
+@media (pointer: coarse) {
+  .nav-button {
+    padding: 11px 16px;
+  }
 }
 
 .dest-current {
