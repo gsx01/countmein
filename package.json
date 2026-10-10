@@ -13,7 +13,7 @@
     "migrate": "wrangler d1 migrations apply countmein --remote --env=\"\"",
     "deploy:staging": "vite build --mode staging && wrangler deploy --env staging",
     "migrate:staging": "wrangler d1 migrations apply countmein-staging --remote --env staging",
-    "typecheck": "tsc --noEmit -p tsconfig.worker.json && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "tsc --noEmit -p tsconfig.worker.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p test/tsconfig.json",
     "test": "vitest run",
     "seed": "node scripts/seed.mjs",
     "seed:staging": "node scripts/seed.mjs --remote --db countmein-staging"
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.0.0",
+    "@cloudflare/vitest-plugin": "^1.4.0",
     "@cloudflare/workers-types": "^5.20260906.0",
     "@preact/preset-vite": "^2.9.1",
     "@types/google.maps": "^3.66.2",
