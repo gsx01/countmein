@@ -52,6 +52,8 @@ const token = resolveToken();
 
 export const hasToken = () => token !== null && token !== '';
 
+export const getToken = () => token;
+
 async function call<T = AppState>(path: string, init?: RequestInit): Promise<T> {
   if (!token) throw new ApiError(401, 'missing token');
   let res: Response;

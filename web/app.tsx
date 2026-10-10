@@ -12,6 +12,7 @@ import {
   createTrip,
   createUser,
   getState,
+  getToken,
   getUsers,
   hasToken,
   rotateUserToken,
@@ -49,6 +50,7 @@ import {
   pushSupported,
 } from './push-client';
 import { useResumeRefresh } from './resume';
+import { saveState } from './state-cache';
 
 const NOTE_MAX = 280;
 
@@ -82,11 +84,19 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const lastFetchAt = useRef(0);
 
+  // Every fresh state from the server lands here, so the offline cache always
+  // holds the latest one.
+  const receive = useCallback((next: AppState) => {
+    setState(next);
+    const token = getToken();
+    if (token) saveState(token, next, new Date());
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     lastFetchAt.current = Date.now();
     try {
-      setState(await getState());
+      receive(await getState());
       setAuthError(false);
       setBanner(null);
     } catch (err) {
@@ -95,35 +105,38 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [receive]);
 
   // A background refetch: unlike `load` it never flips `loading`, so the tree (open
   // maps, typed drafts) stays mounted, and a failure keeps the current state.
   const refresh = useCallback(async () => {
     lastFetchAt.current = Date.now();
     try {
-      setState(await getState());
+      receive(await getState());
       setAuthError(false);
       return true;
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) setAuthError(true);
       return false;
     }
-  }, []);
+  }, [receive]);
 
   // Any write returns fresh full state; apply it (true), or surface the error
   // (false) so a caller can keep its form open on failure.
-  const apply = useCallback(async (op: () => Promise<AppState>) => {
-    try {
-      setState(await op());
-      setBanner(null);
-      return true;
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setAuthError(true);
-      else setBanner(err instanceof Error ? err.message : 'error');
-      return false;
-    }
-  }, []);
+  const apply = useCallback(
+    async (op: () => Promise<AppState>) => {
+      try {
+        receive(await op());
+        setBanner(null);
+        return true;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) setAuthError(true);
+        else setBanner(err instanceof Error ? err.message : 'error');
+        return false;
+      }
+    },
+    [receive],
+  );
 
   useEffect(() => {
     if (!hasToken()) {
@@ -179,7 +192,7 @@ export function App() {
 
       <NotifySettings me={state.me} apply={apply} />
 
-      {state.me.is_admin && <AdminPanel onState={setState} />}
+      {state.me.is_admin && <AdminPanel onState={receive} />}
     </main>
   );
 }
