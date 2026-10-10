@@ -183,12 +183,13 @@ header.app .who {
   gap: 12px;
 }
 
-/* The one-off trip's native date/time pickers: a fixed box matching the other
-   controls (the base rule gives them borders; date needs room for dd/mm/yyyy). */
+/* The one-off trip's native date/time pickers: a box matching the other controls
+   (date needs room for dd/mm/yyyy) that may shrink on the narrowest phones. */
 .add-trip-form .field input[type='date'],
 .add-trip-form .field input[type='time'] {
-  flex: 0 0 160px;
+  flex: 0 1 160px;
   width: 160px;
+  min-width: 0;
 }
 
 .roster {
@@ -347,9 +348,13 @@ button {
   min-width: 76px;
 }
 
-.field .note-input {
-  flex: 1 1 200px;
+.field input[type='text'] {
+  flex: 1 1 160px;
   min-width: 0;
+}
+
+.field input.note-input {
+  flex: 1 1 200px;
 }
 
 button.primary {
@@ -461,15 +466,8 @@ button:disabled {
   gap: 8px;
 }
 
-.admin-user .row > .field input[type='text'] {
-  flex: 1 1 160px;
-  min-width: 0;
-}
-
-/* The pin-emoji field is a small fixed box, not a stretchy text input. The second
-   selector outranks the admin stretch rule above; the first covers the add form. */
-.field input.emoji-input,
-.admin-user .row > .field input.emoji-input {
+/* The pin-emoji field is a small fixed box, not a stretchy text input. */
+.field input.emoji-input {
   flex: 0 0 84px;
   width: 84px;
   text-align: center;
