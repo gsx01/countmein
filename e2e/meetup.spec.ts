@@ -337,3 +337,30 @@ test('09 owner disabled hides the suggestion', async ({ page }) => {
     expect(meetupSelect(page)).toHaveValue('@Pending'),
   );
 });
+
+test('10 out rider still sees the suggestion', async ({ page }) => {
+  reset(start('@Driver'));
+  await as(page, 'rider', T, 'click "I\'m out"');
+  await write(page, `/api/trips/${T}/participation`, () =>
+    card(page, T).getByRole('button', { name: "I'm out", exact: true }).click(),
+  );
+  await pause(page);
+  await check(page, 'rider', 'prompt text with no buttons', async () => {
+    await expect(prompt(page)).toHaveCount(1);
+    await expect(prompt(page)).toContainText('Meetup suggested: @Driver');
+    await expect(prompt(page).locator('button')).toHaveCount(0);
+  });
+  await check(page, 'rider', 'pickup select preselected to @Driver', () =>
+    expect(pickupSelect(page)).toHaveValue('@Driver'),
+  );
+
+  await write(page, `/api/trips/${T}/participation`, () =>
+    card(page, T).getByRole('button', { name: "I'm in", exact: true }).click(),
+  );
+  await pause(page);
+  await check(page, 'rider', 'no .meetup after joining', () => expect(prompt(page)).toHaveCount(0));
+  expect(rider(await apiTrip('rider', T), 'rider')).toMatchObject({
+    response: 'in',
+    pickup_spot: '@Driver',
+  });
+});

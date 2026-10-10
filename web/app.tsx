@@ -1087,8 +1087,8 @@ function TripCard({
 
 // The driver's meetup suggestion as the current rider sees it. Accepting is the
 // ordinary "in at that spot" write, so the driver gets the usual response push. A
-// pending rider gets the text only; their pickup select is preselected instead.
-// The buttons follow the card's read-only rule; the text does not.
+// rider who is not in gets the text only; their pickup select is preselected
+// instead. The buttons follow the card's read-only rule; the text does not.
 function MeetupPrompt({
   trip,
   me,
@@ -1104,7 +1104,7 @@ function MeetupPrompt({
 }) {
   const [busy, setBusy] = useState(false);
   const mine = trip.riders.find((r) => r.id === me.id);
-  if (mine?.response === 'pending') {
+  if (mine && mine.response !== 'in') {
     return (
       <div class="meetup">
         <span class="meetup-text">Meetup suggested: {label}</span>
@@ -1153,10 +1153,9 @@ function MeetupPrompt({
 function RiderControls({ trip, me, spots, apply }: CardProps) {
   const mine = trip.riders.find((r) => r.id === me.id);
   const response = mine?.response ?? 'pending';
-  // A pending rider's select starts on the driver's meetup spot, so "I'm in"
-  // joins there; a spot of the rider's own always wins.
-  const defaultSpot =
-    mine?.pickup_spot ?? (response === 'pending' ? trip.meetup_label : null) ?? '';
+  // A rider who is not in has no spot, so their select starts on the driver's
+  // meetup spot and "I'm in" joins there; a spot of the rider's own always wins.
+  const defaultSpot = mine?.pickup_spot ?? trip.meetup_label ?? '';
   const [spot, setSpot] = useState(defaultSpot);
   const [suggested, setSuggested] = useState(mine?.suggested_etd ?? '');
   const [note, setNote] = useState(mine?.note ?? '');
