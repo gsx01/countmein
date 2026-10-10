@@ -1282,6 +1282,7 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
   const [etd, setEtdValue] = useState(trip.etd);
   const [note, setNote] = useState(trip.note ?? '');
   const [meetup, setMeetupValue] = useState(trip.meetup_label ?? '');
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState(false);
   const id = useId();
 
@@ -1313,6 +1314,11 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
   const noteChanged = note.trim() !== (trip.note ?? '');
   const cancelled = trip.status === 'cancelled';
 
+  const toggleCancelled = async () => {
+    await run(() => setCancelled(trip.id, !cancelled));
+    setConfirmCancel(false);
+  };
+
   return (
     <div class="controls">
       <div class="row">
@@ -1332,9 +1338,6 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
               onClick={() => void run(() => setEtd(trip.id, etd))}
             >
               Save
-            </button>
-            <button disabled={busy} onClick={() => void run(() => setCancelled(trip.id, !cancelled))}>
-              {cancelled ? 'Uncancel' : 'Cancel'}
             </button>
           </span>
         </div>
@@ -1414,6 +1417,30 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
             }
           />
         </div>
+      </div>
+
+      <div class="actions trip-status">
+        {cancelled ? (
+          <button disabled={busy} onClick={() => void toggleCancelled()}>
+            Restore trip
+          </button>
+        ) : confirmCancel ? (
+          <>
+            <span>Cancel this trip for everyone?</span>
+            <span class="btn-group">
+              <button class="danger-fill" disabled={busy} onClick={() => void toggleCancelled()}>
+                Yes, cancel trip
+              </button>
+              <button disabled={busy} onClick={() => setConfirmCancel(false)}>
+                Keep trip
+              </button>
+            </span>
+          </>
+        ) : (
+          <button class="danger" disabled={busy} onClick={() => setConfirmCancel(true)}>
+            Cancel trip
+          </button>
+        )}
       </div>
     </div>
   );

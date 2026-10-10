@@ -79,6 +79,26 @@ test('the driver changes the ETD and a refreshed rider sees it', async ({ page, 
   await expect(card(riderPage, T).locator('.etd')).toHaveText('Leaves 07:15');
 });
 
+test('the driver confirms before cancelling, then restores', async ({ page }) => {
+  const button = (name: string) => card(page, T).getByRole('button', { name, exact: true });
+  await as(page, 'driver', T, 'Cancel trip, then Keep trip');
+  await button('Cancel trip').click();
+  await button('Keep trip').click();
+  await expect(button('Cancel trip')).toBeVisible();
+  expect((await apiTrip('driver', T)).status).toBe('scheduled');
+
+  await say(page, `${USERS.driver.role}: Cancel trip, then confirm`);
+  await button('Cancel trip').click();
+  await write(page, `/api/trips/${T}/cancel`, () => button('Yes, cancel trip').click());
+  await expect(card(page, T).locator('.badge.cancelled')).toBeVisible();
+  expect((await apiTrip('driver', T)).status).toBe('cancelled');
+
+  await say(page, `${USERS.driver.role}: Restore trip`);
+  await write(page, `/api/trips/${T}/cancel`, () => button('Restore trip').click());
+  await expect(button('Cancel trip')).toBeVisible();
+  expect((await apiTrip('driver', T)).status).toBe('scheduled');
+});
+
 test('offline is read-only', async ({ page, context }) => {
   await as(page, 'rider', T, 'online');
   await expect(card(page, T).locator('.controls')).toHaveCount(1);

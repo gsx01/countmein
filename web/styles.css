@@ -440,6 +440,27 @@ button.primary {
   border-color: transparent;
 }
 
+button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+button.danger-fill {
+  background: var(--danger-fill);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* Cancelling the trip sits apart from the field Save buttons, and its two-step
+   confirm wraps its buttons below the question when they don't fit. */
+.trip-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
 /* Driver departure: the "I'm leaving" action, and the post-departure stamp. */
 button.leaving {
   background: var(--accent-fill);
