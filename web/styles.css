@@ -50,22 +50,28 @@ main {
 
 header.app {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
 header.app h1 {
   font-size: 20px;
   margin: 0;
+  white-space: nowrap;
 }
 
+/* Name over push status, right-aligned, so a long name wraps here and never
+   pushes the title onto two lines. */
 header.app .who {
   color: var(--muted);
   font-size: 14px;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  min-width: 0;
 }
 
 .push {
@@ -198,9 +204,13 @@ header.app .who {
   margin: 0 0 12px;
 }
 
+/* Name and status share a line when both fit; otherwise the status drops below,
+   right-aligned, rather than both squeezing into half-width columns. */
 .roster li {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  column-gap: 12px;
   padding: 6px 0;
   border-top: 1px solid var(--border);
 }
@@ -224,6 +234,8 @@ header.app .who {
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
+  margin-left: auto;
+  min-width: 0;
 }
 
 .rider-meta .suggestion {

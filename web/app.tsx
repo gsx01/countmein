@@ -319,8 +319,10 @@ export function App() {
       <header class="app">
         <h1>Count me in</h1>
         <span class="who">
-          {state.me.name}
-          {state.me.is_admin ? ' - admin' : ''}
+          <span>
+            {state.me.name}
+            {state.me.is_admin ? ' - admin' : ''}
+          </span>
           <PushToggle />
         </span>
       </header>
@@ -1050,14 +1052,14 @@ function MeetupPrompt({
     <div class="meetup">
       <span class="meetup-text">Meetup suggested: {label}</span>
       {!readOnly && (
-        <>
+        <span class="btn-group">
           <button class="primary" disabled={busy} onClick={accept}>
             Accept
           </button>
           <button disabled={busy} onClick={() => void run(() => declineMeetup(trip.id))}>
             Keep mine
           </button>
-        </>
+        </span>
       )}
     </div>
   );
