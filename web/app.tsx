@@ -786,6 +786,9 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    setSpot(mine?.pickup_spot ?? '');
+  }, [mine?.pickup_spot]);
+  useEffect(() => {
     setSuggested(mine?.suggested_etd ?? '');
   }, [mine?.suggested_etd]);
   useEffect(() => {
