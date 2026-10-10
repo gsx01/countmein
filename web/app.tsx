@@ -48,6 +48,7 @@ import {
   iosNeedsInstall,
   pushSupported,
 } from './push-client';
+import { useResumeRefresh } from './resume';
 
 const NOTE_MAX = 280;
 
@@ -132,6 +133,8 @@ export function App() {
     }
     void load();
   }, [load]);
+
+  useResumeRefresh(refresh, lastFetchAt, state !== null && !authError);
 
   if (authError) {
     return (
