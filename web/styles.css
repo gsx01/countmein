@@ -483,6 +483,14 @@ button.link {
     min-height: 44px;
   }
 
+  /* Links on a line of text keep the 44px target but not its layout height, so
+     a card's lines stay evenly spaced whether or not they carry a link. Only
+     where nothing else tappable sits within 10px above or below. */
+  .card .driver button.link,
+  .route > button.link {
+    margin-block: -10px;
+  }
+
   .field {
     min-height: 44px;
   }
