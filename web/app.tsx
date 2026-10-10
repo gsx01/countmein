@@ -859,7 +859,7 @@ function TripCard({ trip, me, spots, apply, offline, pendingLeave, onLeave }: Tr
   // Truthy check: a state cached before the meetup feature has no such field.
   const meetup = !cancelled && trip.meetup_label ? trip.meetup_label : null;
   return (
-    <section class={`card${cancelled ? ' cancelled' : ''}`}>
+    <section class={`card${cancelled ? ' cancelled' : ''}`} data-trip-id={trip.id}>
       <div class="top">
         <span class="date">{formatDate(trip.trip_date)}</span>
         <span class="badges">
