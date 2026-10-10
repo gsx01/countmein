@@ -37,9 +37,10 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
 - `src/config.ts` - resolves the office destination from `OFFICE_DESTINATION`.
 - `src/constants.ts`, `src/types.ts` - shared by Worker and web.
 - `web/` - Preact SPA (`app.tsx`, `api-client.ts`, `push-client.ts`, `maps.ts`,
-  `route.ts`, `config.ts`, `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`,
-  `manifest.webmanifest`, `favicon.png`). `maps.ts` lazily loads the Google Maps
-  SDK; `route.ts` computes the ETA and pin order.
+  `route.ts`, `resume.ts`, `state-cache.ts`, `leave-queue.ts`, `config.ts`,
+  `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`, `manifest.webmanifest`,
+  `favicon.png`). `maps.ts` lazily loads the Google Maps SDK; `route.ts` computes
+  the ETA and pin order.
 - `migrations/` (`0001_init.sql` .. `0014_notify_prefs.sql`), `scripts/seed.mjs`,
   `scripts/gen-vapid.mjs`.
 
@@ -47,7 +48,11 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
 
 - Lock is computed, never stored: a trip freezes when local time reaches `etd` on
   `trip_date`. Once locked, all writes return 409 - except the driver's "I'm
-  leaving", which survives the lock and only stamps `left_at`.
+  leaving", which survives the lock and only stamps `left_at`. It is one-shot
+  (`409 already left`) and takes an optional `{ left_at }` tap time (no body ->
+  now), clamped by `clampLeftAt`: more than 60s ahead -> now; not an ISO instant
+  or not on the trip's Amsterdam date -> 400. A push sent more than 2 min after
+  the tap reads "Driver left at HH:MM" instead of "Driver is leaving now".
 - Trips are created two ways, both idempotent (`ON CONFLICT(trip_date)` /
   `INSERT OR IGNORE`): `ensureTrips` tops up auto Mon/Thu trips within
   `WINDOW_DAYS` (7); `POST /api/trips` (any enabled user) adds a one-off manual
@@ -90,6 +95,23 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
   a user who turned that category off is dropped. `PATCH /api/prefs` edits your own
   flags. Sends run via `ctx.waitUntil`; payloads carry the recipient's own `/?t=`
   link and are tagged so a newer push replaces the older one in the tray.
+- Resume and offline (client only):
+  - `resume.ts` refetches silently (no `loading`, so open maps and drafts stay
+    mounted) on `visibilitychange` -> visible, `pageshow` persisted, `online`,
+    and every 60s while visible, all behind one 10s throttle. A failed fetch
+    never consumes the throttle. Route points are keyed on content (`routeKey`)
+    so an unchanged refresh doesn't redraw markers.
+  - `state-cache.ts` keeps the last good state in `localStorage`, keyed to the
+    token. When a fetch fails with a network error the app shows that state with
+    an "Offline - data from HH:MM" banner, and every card is read-only except
+    "I'm leaving". `sw.js` precaches the shell and the hashed `/assets/*` so a
+    cold start works offline.
+  - `leave-queue.ts`: an "I'm leaving" tap is stored (with its tap time and
+    token) before any network call, and the card shows "Left HH:MM -
+    sending...". The queue flushes after the first load, on resume, on `online`,
+    and on a 15s/30s/60s backoff. Success or `409 already left` -> done; other
+    4xx -> dropped with a banner notice; network/5xx -> retry. Entries for past
+    trip dates are pruned on start.
 - User management is admin-only (`/api/users`, else 403): `GET` lists users with
   tokens; `POST` creates an enabled user (back-fills `pending` participation);
   `PATCH /:id` edits name/enabled/is_admin/pickup_label/address/emoji;
