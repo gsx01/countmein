@@ -24,23 +24,20 @@ test.beforeEach(() => {
   });
 });
 
-// Per colour scheme into e2e/screenshots/<device>/: one full-page shot, plus the
-// page cut into viewport-high screens, which stay legible when the full page is
-// too tall to view at native scale.
+// Per colour scheme into e2e/screenshots/<device>/: the page as consecutive
+// viewport screens, scrolled into place. Not a full-page capture: Chromium renders
+// that without the device's touch emulation, so (pointer: coarse) styles go
+// missing. The last screen is aligned to the page bottom and may overlap the one
+// before it.
 async function shoot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
   const dir = path.join(ROOT, 'e2e', 'screenshots', testInfo.project.name);
-  const { width, height } = page.viewportSize()!;
+  const { height } = page.viewportSize()!;
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
-    await page.screenshot({ path: path.join(dir, `${name}-${colorScheme}.png`), fullPage: true });
     const total = await page.evaluate(() => document.documentElement.scrollHeight);
     for (let i = 0; i * height < total; i++) {
-      const y = i * height;
-      await page.screenshot({
-        path: path.join(dir, `${name}-${colorScheme}-${i + 1}.png`),
-        fullPage: true,
-        clip: { x: 0, y, width, height: Math.min(height, total - y) },
-      });
+      await page.evaluate((y) => window.scrollTo(0, y), Math.min(i * height, total - height));
+      await page.screenshot({ path: path.join(dir, `${name}-${colorScheme}-${i + 1}.png`) });
     }
   }
 }
