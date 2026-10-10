@@ -1,7 +1,7 @@
 import type { Env } from './index';
 import { resolveOffice } from './config';
 import { NOTIFY_CATEGORIES, type Destination } from './types';
-import { isLocked, localDateStr } from './time';
+import { clampLeftAt, isLocked, localDateStr } from './time';
 import { addManualTrip, ensureTrips } from './trips';
 import { buildState, getTrip, getUserByToken, isKnownSpot, type User } from './db';
 import { notifyChange } from './notify';
@@ -45,6 +45,18 @@ function tokenFrom(request: Request, url: URL): string | null {
 async function readBody(request: Request): Promise<Record<string, unknown>> {
   try {
     const body = await request.json();
+    if (body && typeof body === 'object') return body as Record<string, unknown>;
+  } catch {
+    // fall through
+  }
+  throw new ApiError(400, 'invalid JSON body');
+}
+
+async function readOptionalBody(request: Request): Promise<Record<string, unknown>> {
+  const text = await request.text();
+  if (text.trim() === '') return {};
+  try {
+    const body: unknown = JSON.parse(text);
     if (body && typeof body === 'object') return body as Record<string, unknown>;
   } catch {
     // fall through
@@ -631,9 +643,10 @@ async function setDriver(
 // The trip driver signals departure. Unlike every other write this is NOT blocked
 // by the lock: "leaving" naturally happens at/after ETD, and it mutates no plan
 // data, only a notification stamp. One-shot: a second call once left_at is set is
-// a 409. Pushes the non-out riders "Driver is leaving now".
+// a 409, which makes a queued offline retry idempotent. The body may carry the
+// tap time (`left_at`), clamped by clampLeftAt. Pushes the non-out riders.
 async function leaving(
-  _request: Request,
+  request: Request,
   env: Env,
   ctx: ExecutionContext,
   user: User,
@@ -645,11 +658,17 @@ async function leaving(
   if (trip.status === 'cancelled') throw new ApiError(409, 'trip cancelled');
   if (trip.left_at !== null) throw new ApiError(409, 'already left');
 
+  const body = await readOptionalBody(request);
+  const leftAt = clampLeftAt(body.left_at, trip.trip_date, now);
+  if (!leftAt) throw new ApiError(400, 'left_at must be an ISO time on the trip date');
+
   await env.DB.prepare('UPDATE trips SET left_at = ? WHERE id = ?')
-    .bind(now.toISOString(), tripId)
+    .bind(leftAt.toISOString(), tripId)
     .run();
 
-  ctx.waitUntil(notifyChange(env, user, trip, { kind: 'leaving' }));
+  ctx.waitUntil(
+    notifyChange(env, user, trip, { kind: 'leaving', leftAt: leftAt.toISOString() }),
+  );
 }
 
 // A one-off trip destination override, or null to fall back to the office

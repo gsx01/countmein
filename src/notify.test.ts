@@ -194,7 +194,7 @@ describe('notifyChange routing', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(null, { status: 201 }));
 
-    await notifyChange(env, alice, trip, { kind: 'leaving' });
+    await notifyChange(env, alice, trip, { kind: 'leaving', leftAt: new Date().toISOString() });
 
     // Driver (1, actor) and the out rider (3) excluded; only Bob is left.
     expect(endpointsHit(fetchMock)).toEqual(['https://push.test/bob']);

@@ -13,7 +13,7 @@ export type NotifyAction =
   | { kind: 'cancel'; cancelled: boolean }
   | { kind: 'trip-note'; note: string | null }
   | { kind: 'driver'; previous: number | null; driverName: string | null }
-  | { kind: 'leaving' }
+  | { kind: 'leaving'; leftAt: string }
   | { kind: 'participation'; response: 'in' | 'out'; spot: string | null }
   | { kind: 'suggestion'; suggested: string | null }
   | { kind: 'rider-note'; note: string | null };
