@@ -5,9 +5,11 @@
   --muted: #6b7280;
   --border: #e3e6ea;
   --accent: #2563eb;
+  --accent-fill: #2563eb;
   --accent-text: #ffffff;
   --in: #15803d;
   --danger: #b91c1c;
+  --danger-fill: #b91c1c;
   color-scheme: light dark;
 }
 
@@ -18,10 +20,14 @@
     --text: #e8eaed;
     --muted: #9aa2ad;
     --border: #333a44;
-    --accent: #3b82f6;
+    /* Text and fill accents differ in dark mode: a blue light enough to read on
+       the dark card is too light to carry white button text. */
+    --accent: #60a5fa;
+    --accent-fill: #2563eb;
     --accent-text: #ffffff;
     --in: #4ade80;
     --danger: #f87171;
+    --danger-fill: #b91c1c;
   }
 }
 
@@ -339,14 +345,14 @@ button {
 }
 
 button.primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-text);
   border-color: transparent;
 }
 
 /* Driver departure: the "I'm leaving" action, and the post-departure stamp. */
 button.leaving {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-text);
   border-color: transparent;
   margin-bottom: 12px;
@@ -381,7 +387,7 @@ button:disabled {
 }
 
 .banner {
-  background: var(--danger);
+  background: var(--danger-fill);
   color: #fff;
   border-radius: 8px;
   padding: 10px 14px;
@@ -519,7 +525,7 @@ button:disabled {
   margin-top: 10px;
   padding: 8px 16px;
   border-radius: 8px;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-text);
   font-weight: 600;
   text-decoration: none;
