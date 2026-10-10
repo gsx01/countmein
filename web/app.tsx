@@ -78,9 +78,11 @@ export function App() {
   const [authError, setAuthError] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const lastFetchAt = useRef(0);
 
   const load = useCallback(async () => {
     setLoading(true);
+    lastFetchAt.current = Date.now();
     try {
       setState(await getState());
       setAuthError(false);
@@ -90,6 +92,20 @@ export function App() {
       else setBanner(err instanceof Error ? err.message : 'error');
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  // A background refetch: unlike `load` it never flips `loading`, so the tree (open
+  // maps, typed drafts) stays mounted, and a failure keeps the current state.
+  const refresh = useCallback(async () => {
+    lastFetchAt.current = Date.now();
+    try {
+      setState(await getState());
+      setAuthError(false);
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) setAuthError(true);
+      return false;
     }
   }, []);
 
@@ -143,7 +159,7 @@ export function App() {
       {banner && (
         <div class="banner">
           <span>{banner}</span>
-          <button onClick={() => void load()}>Retry</button>
+          <button onClick={() => void refresh().then((ok) => ok && setBanner(null))}>Retry</button>
         </div>
       )}
 
