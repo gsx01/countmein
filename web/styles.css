@@ -465,6 +465,14 @@ button.link {
     height: 44px;
   }
 
+  /* iOS Safari zooms the page into any field under 16px when it gets focus. */
+  select,
+  input[type='date'],
+  input[type='time'],
+  input[type='text'] {
+    font-size: 16px;
+  }
+
   button.link {
     min-height: 44px;
   }
