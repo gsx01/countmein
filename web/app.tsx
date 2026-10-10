@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'preact/hooks';
 import type {
   AdminUser,
   AdminWriteResponse,
@@ -373,6 +373,7 @@ function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<bo
   const [date, setDate] = useState('');
   const [etd, setEtd] = useState('');
   const [busy, setBusy] = useState(false);
+  const id = useId();
 
   if (!open) {
     return (
@@ -398,9 +399,10 @@ function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<bo
   return (
     <Panel class="add-trip-form" title="Add a one-off trip" onClose={() => setOpen(false)}>
       <div class="row">
-        <label>Date</label>
+        <label for={`${id}-date`}>Date</label>
         <div class="field">
           <input
+            id={`${id}-date`}
             type="date"
             value={date}
             disabled={busy}
@@ -409,9 +411,10 @@ function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<bo
         </div>
       </div>
       <div class="row">
-        <label>Leaves</label>
+        <label for={`${id}-etd`}>Leaves</label>
         <div class="field">
           <input
+            id={`${id}-etd`}
             type="time"
             value={etd}
             disabled={busy}
@@ -526,6 +529,7 @@ function UserRow({ user, busy, run }: { user: AdminUser; busy: boolean; run: Run
   const [label, setLabel] = useState(user.pickup_label ?? '');
   const [emoji, setEmoji] = useState(user.emoji ?? '');
   const [copied, setCopied] = useState(false);
+  const id = useId();
 
   useEffect(() => setName(user.name), [user.name]);
   useEffect(() => setLabel(user.pickup_label ?? ''), [user.pickup_label]);
@@ -561,9 +565,10 @@ function UserRow({ user, busy, run }: { user: AdminUser; busy: boolean; run: Run
   return (
     <li class={`admin-user${user.enabled ? '' : ' disabled'}`}>
       <div class="row">
-        <label>Name</label>
+        <label for={`${id}-name`}>Name</label>
         <div class="field">
           <input
+            id={`${id}-name`}
             type="text"
             value={name}
             disabled={busy}
@@ -572,9 +577,10 @@ function UserRow({ user, busy, run }: { user: AdminUser; busy: boolean; run: Run
         </div>
       </div>
       <div class="row">
-        <label>Pickup</label>
+        <label for={`${id}-pickup`}>Pickup</label>
         <div class="field">
           <input
+            id={`${id}-pickup`}
             type="text"
             value={label}
             disabled={busy}
@@ -590,9 +596,10 @@ function UserRow({ user, busy, run }: { user: AdminUser; busy: boolean; run: Run
         </div>
       </div>
       <div class="row">
-        <label>Pin emoji</label>
+        <label for={`${id}-emoji`}>Pin emoji</label>
         <div class="field">
           <input
+            id={`${id}-emoji`}
             type="text"
             class="emoji-input"
             value={emoji}
@@ -634,9 +641,10 @@ function UserRow({ user, busy, run }: { user: AdminUser; busy: boolean; run: Run
         </div>
       </div>
       <div class="row">
-        <label>Link</label>
+        <label for={`${id}-link`}>Link</label>
         <div class="field">
           <input
+            id={`${id}-link`}
             class="note-input"
             type="text"
             readOnly
@@ -677,6 +685,7 @@ function AddUser({ busy, run }: { busy: boolean; run: Run }) {
   const [label, setLabel] = useState('');
   const [emoji, setEmoji] = useState('');
   const [admin, setAdmin] = useState(false);
+  const id = useId();
 
   if (!open) {
     return (
@@ -699,9 +708,10 @@ function AddUser({ busy, run }: { busy: boolean; run: Run }) {
   return (
     <div class="add-user-form">
       <div class="row">
-        <label>Name</label>
+        <label for={`${id}-name`}>Name</label>
         <div class="field">
           <input
+            id={`${id}-name`}
             type="text"
             value={name}
             disabled={busy}
@@ -710,9 +720,10 @@ function AddUser({ busy, run }: { busy: boolean; run: Run }) {
         </div>
       </div>
       <div class="row">
-        <label>Pickup</label>
+        <label for={`${id}-pickup`}>Pickup</label>
         <div class="field">
           <input
+            id={`${id}-pickup`}
             type="text"
             value={label}
             disabled={busy}
@@ -722,9 +733,10 @@ function AddUser({ busy, run }: { busy: boolean; run: Run }) {
         </div>
       </div>
       <div class="row">
-        <label>Pin emoji</label>
+        <label for={`${id}-emoji`}>Pin emoji</label>
         <div class="field">
           <input
+            id={`${id}-emoji`}
             type="text"
             class="emoji-input"
             value={emoji}
@@ -734,17 +746,15 @@ function AddUser({ busy, run }: { busy: boolean; run: Run }) {
           />
         </div>
       </div>
-      <div class="row">
-        <label>Admin</label>
-        <div class="field">
-          <input
-            type="checkbox"
-            checked={admin}
-            disabled={busy}
-            onChange={(e) => setAdmin((e.target as HTMLInputElement).checked)}
-          />
-        </div>
-      </div>
+      <label class="pref-row actions">
+        <input
+          type="checkbox"
+          checked={admin}
+          disabled={busy}
+          onChange={(e) => setAdmin((e.target as HTMLInputElement).checked)}
+        />
+        <span>Admin</span>
+      </label>
       <div class="field actions">
         <button
           class="primary"
@@ -1090,6 +1100,7 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
   const [suggested, setSuggested] = useState(mine?.suggested_etd ?? '');
   const [note, setNote] = useState(mine?.note ?? '');
   const [busy, setBusy] = useState(false);
+  const id = useId();
 
   useEffect(() => {
     setSpot(defaultSpot);
@@ -1113,9 +1124,10 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
   return (
     <div class="controls">
       <div class="row">
-        <label>Pickup</label>
+        <label for={`${id}-pickup`}>Pickup</label>
         <div class="field">
           <select
+            id={`${id}-pickup`}
             value={spot}
             disabled={busy}
             onChange={(e) => {
@@ -1155,9 +1167,10 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
       </div>
 
       <div class="row">
-        <label>Suggest time</label>
+        <label for={`${id}-suggest`}>Suggest time</label>
         <div class="field">
           <input
+            id={`${id}-suggest`}
             type="time"
             value={suggested}
             disabled={busy}
@@ -1181,9 +1194,10 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
       </div>
 
       <div class="row">
-        <label>Your note</label>
+        <label for={`${id}-note`}>Your note</label>
         <div class="field">
           <input
+            id={`${id}-note`}
             type="text"
             class="note-input"
             value={note}
@@ -1209,6 +1223,7 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
   const [note, setNote] = useState(trip.note ?? '');
   const [meetup, setMeetupValue] = useState(trip.meetup_label ?? '');
   const [busy, setBusy] = useState(false);
+  const id = useId();
 
   useEffect(() => {
     setEtdValue(trip.etd);
@@ -1241,9 +1256,10 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
   return (
     <div class="controls">
       <div class="row">
-        <label>Leaves</label>
+        <label for={`${id}-etd`}>Leaves</label>
         <div class="field">
           <input
+            id={`${id}-etd`}
             type="time"
             value={etd}
             disabled={busy}
@@ -1265,9 +1281,10 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
       </div>
 
       <div class="row">
-        <label>Trip note</label>
+        <label for={`${id}-note`}>Trip note</label>
         <div class="field">
           <input
+            id={`${id}-note`}
             type="text"
             class="note-input"
             value={note}
@@ -1288,9 +1305,10 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
 
       {!cancelled && (
         <div class="row">
-          <label>Meetup</label>
+          <label for={`${id}-meetup`}>Meetup</label>
           <div class="field">
             <select
+              id={`${id}-meetup`}
               value={meetup}
               disabled={busy}
               onChange={(e) => void suggestMeetup((e.target as HTMLSelectElement).value)}
