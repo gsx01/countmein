@@ -19,6 +19,13 @@ Changes flow one way: commit on `develop`, then fast-forward `develop -> staging
 or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to run
 `! npm run deploy`. The agent CAN run `deploy:staging` and `migrate:staging`.
 
+Before every deploy, check the target D1 for pending migrations
+(`npx wrangler d1 migrations list countmein --remote`, or `countmein-staging
+--remote --env staging`) and migrate first if any are listed. An environment can
+lag several plans behind `develop`, so "this change adds no migration" is not
+enough: deploying code ahead of its schema 500s every `GET /api/state`. Prod
+migrations are user-run too (`! npm run migrate`).
+
 ## Layout
 
 - `src/index.ts` - Worker entry: `fetch` (routes `/api/*`, else static assets)
