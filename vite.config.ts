@@ -9,8 +9,11 @@ import { cloudflare } from '@cloudflare/vite-plugin';
 // source. All of these are public by design - the VAPID public key is half a
 // keypair whose private half is a Worker secret; the Maps key is referrer- and
 // quota-restricted in Google Cloud. NEVER put a secret in these files.
+// The e2e build (`vite build --mode e2e`, run by the Playwright global setup)
+// reads no .env at all: with an empty Maps key no billable Maps request can be
+// made, and the build never depends on local config.
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  const env: Record<string, string> = mode === 'e2e' ? {} : loadEnv(mode, process.cwd(), '');
   return {
     root: 'web',
     plugins: [preact(), cloudflare()],
