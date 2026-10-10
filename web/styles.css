@@ -459,6 +459,7 @@ div.leaving {
 button.link {
   height: auto;
   min-width: 44px;
+  flex-shrink: 0;
   padding: 0;
   text-align: left;
   background: none;
