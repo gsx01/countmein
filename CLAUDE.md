@@ -85,10 +85,17 @@ migrations are user-run too (`! npm run migrate`).
   driver; someone takes one via the driver route. Auth for ETD /
   note / destination / meetup / cancel / leaving is `user.id === trip.driver_id`;
   `users.is_admin` gates user management.
+- Trip settings: `PATCH /api/trips/:id` (driver, unlocked) takes any of `{ etd,
+  meetup_label, note }`; an empty body or an unknown key is 400, and every field
+  is validated before anything is written. Only changed fields are stored, and
+  they go out as ONE push (a lone change reads as its own push; several are
+  listed as "<day> - trip updated"). The driver card drafts all three behind one
+  "Save changes". `POST /api/trips/:id/etd` stays for the roster's "Apply" on a
+  rider's suggested time. Cancelling sits apart, behind a two-step confirm.
 - Meetup suggestion: the driver may suggest one spot per trip
-  (`trips.meetup_label`) from the live pickup list via `POST
-  /api/trips/:id/meetup` `{ label | null }` (unknown label 400, locked/cancelled
-  409). It changes nobody's pickup. Accepting is derived, not stored: a rider has
+  (`trips.meetup_label`) from the live pickup list via the PATCH above
+  (`meetup_label: label | null`; unknown label 400, cancelled 409). It changes
+  nobody's pickup. Accepting is derived, not stored: a rider has
   accepted when `pickup_spot === meetup_label`, and the client accepts through the
   participation route. Only "Keep mine" is stored: `POST
   /api/trips/:id/meetup/decline` (no body; the driver 403; not `in`, locked,
@@ -111,8 +118,8 @@ migrations are user-run too (`! npm run migrate`).
 - Web Push, two sources, both best-effort (send failures swallowed, 404/410 prunes
   the subscription, no retry):
   - On-change (`notify.ts`): a write pushes only when it changes the stored value.
-    A rider action notifies the driver; a driver action (ETD, trip-note, cancel,
-    leaving, meetup set or changed) notifies the non-out riders; a driver change
+    A rider action notifies the driver; a driver action (trip settings, cancel,
+    leaving) notifies the non-out riders; a driver change
     also notifies the previous driver. Clearing a meetup or declining it pushes
     nothing. The actor is never pushed.
   - Evening reminder (`reminder.ts`, gated in `cron.ts` to Amsterdam-local 20:00):
