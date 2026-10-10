@@ -9,6 +9,9 @@ export interface RiderState {
   pickup_spot: string | null;
   suggested_etd: string | null;
   note: string | null;
+  // "Keep mine" on the trip's meetup suggestion. Accepting is not stored: a rider
+  // has accepted when their pickup_spot equals the trip's meetup_label.
+  meetup_declined: boolean;
 }
 
 // A pickup spot as offered by an enabled user: the label the rider picks, plus
@@ -58,6 +61,9 @@ export interface Trip {
   // ISO timestamp the driver tapped "I'm leaving", or null if not yet. Drives the
   // one-shot leaving ping and the "Left HH:MM" card stamp.
   left_at: string | null;
+  // The driver's suggested meetup spot (a live pickup label), or null when none is
+  // set or the stored label is no longer in the spot list.
+  meetup_label: string | null;
   riders: RiderState[];
 }
 

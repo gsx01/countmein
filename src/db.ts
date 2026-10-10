@@ -40,10 +40,11 @@ export interface TripRow {
   dest_lng: number | null;
   dest_place_id: string | null;
   left_at: string | null;
+  meetup_label: string | null;
 }
 
 const TRIP_COLUMNS =
-  'id, trip_date, weekday, etd, status, source, note, driver_id, dest_label, dest_lat, dest_lng, dest_place_id, left_at';
+  'id, trip_date, weekday, etd, status, source, note, driver_id, dest_label, dest_lat, dest_lng, dest_place_id, left_at, meetup_label';
 
 interface RiderRow {
   trip_id: number;
@@ -53,6 +54,7 @@ interface RiderRow {
   pickup_spot: string | null;
   suggested_etd: string | null;
   note: string | null;
+  meetup_declined: number;
 }
 
 export async function getUserByToken(db: D1Database, token: string): Promise<User | null> {
@@ -167,7 +169,8 @@ export async function buildState(
     const placeholders = tripIds.map(() => '?').join(', ');
     const riders = await db
       .prepare(
-        `SELECT p.trip_id, p.user_id, u.name, p.response, p.pickup_spot, p.suggested_etd, p.note
+        `SELECT p.trip_id, p.user_id, u.name, p.response, p.pickup_spot, p.suggested_etd, p.note,
+                p.meetup_declined
            FROM participation p JOIN users u ON u.id = p.user_id
           WHERE p.trip_id IN (${placeholders}) AND u.enabled = 1
           ORDER BY p.trip_id, u.id`,
@@ -181,6 +184,11 @@ export async function buildState(
     }
   }
 
+  // A suggestion whose label left the live list (owner disabled, label renamed)
+  // is hidden, not cleared, so it returns if the label does.
+  const spots = await pickupSpots(db, office);
+  const spotLabels = new Set(spots.map((s) => s.label));
+
   const tripDtos: Trip[] = trips.results.map((t) => {
     // A trip's driver is implicitly "in" and has no roster entry: drop their
     // participation row from the displayed riders.
@@ -193,6 +201,7 @@ export async function buildState(
         pickup_spot: r.pickup_spot,
         suggested_etd: r.suggested_etd,
         note: r.note,
+        meetup_declined: r.meetup_declined === 1,
       }));
     const driverUser = t.driver_id === null ? undefined : userById.get(t.driver_id);
     const dest_custom = t.dest_label !== null;
@@ -222,13 +231,14 @@ export async function buildState(
       destination,
       dest_custom,
       left_at: t.left_at,
+      meetup_label: t.meetup_label !== null && spotLabels.has(t.meetup_label) ? t.meetup_label : null,
       riders,
     };
   });
 
   return {
     me: { id: me.id, name: me.name, is_admin: me.is_admin === 1, prefs: me.prefs },
-    spots: await pickupSpots(db, office),
+    spots,
     trips: tripDtos,
   };
 }
