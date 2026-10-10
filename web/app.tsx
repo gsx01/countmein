@@ -11,6 +11,7 @@ import {
   ApiError,
   createTrip,
   createUser,
+  declineMeetup,
   getState,
   getToken,
   getUsers,
@@ -21,6 +22,7 @@ import {
   setDriver,
   setEtd,
   setLeaving,
+  setMeetup,
   setParticipation,
   setRiderNote,
   setSuggestion,
@@ -854,6 +856,8 @@ function TripCard({ trip, me, spots, apply, offline, pendingLeave, onLeave }: Tr
   // Offline a write can't land, so the card behaves as if locked. "I'm leaving"
   // is the exception: it is gated by neither.
   const readOnly = trip.locked || offline;
+  // Truthy check: a state cached before the meetup feature has no such field.
+  const meetup = !cancelled && trip.meetup_label ? trip.meetup_label : null;
   return (
     <section class={`card${cancelled ? ' cancelled' : ''}`}>
       <div class="top">
@@ -914,6 +918,15 @@ function TripCard({ trip, me, spots, apply, offline, pendingLeave, onLeave }: Tr
                       ? 'not coming'
                       : 'no reply'}
                 </span>
+                {iAmDriver && meetup && r.response === 'in' && (
+                  <span class="meetup-status">
+                    {r.pickup_spot === meetup
+                      ? `meeting at ${meetup}`
+                      : r.meetup_declined
+                        ? `keeps ${r.pickup_spot}`
+                        : 'no answer'}
+                  </span>
+                )}
                 {suggestion && (
                   <span class="suggestion">
                     suggests {suggestion}
@@ -941,25 +954,98 @@ function TripCard({ trip, me, spots, apply, offline, pendingLeave, onLeave }: Tr
 
       {!cancelled && <TripRoute trip={trip} spots={spots} />}
 
+      {meetup && !iAmDriver && (
+        <MeetupPrompt trip={trip} me={me} label={meetup} readOnly={readOnly} apply={apply} />
+      )}
+
       {!readOnly && !iAmDriver && !cancelled && (
         <RiderControls trip={trip} me={me} spots={spots} apply={apply} />
       )}
-      {!readOnly && iAmDriver && <DriverControls trip={trip} apply={apply} />}
+      {!readOnly && iAmDriver && <DriverControls trip={trip} spots={spots} apply={apply} />}
     </section>
+  );
+}
+
+// The driver's meetup suggestion as the current rider sees it. Accepting is the
+// ordinary "in at that spot" write, so the driver gets the usual response push. A
+// pending rider gets the text only; their pickup select is preselected instead.
+// The buttons follow the card's read-only rule; the text does not.
+function MeetupPrompt({
+  trip,
+  me,
+  label,
+  readOnly,
+  apply,
+}: {
+  trip: Trip;
+  me: AppState['me'];
+  label: string;
+  readOnly: boolean;
+  apply: CardProps['apply'];
+}) {
+  const [busy, setBusy] = useState(false);
+  const mine = trip.riders.find((r) => r.id === me.id);
+  if (mine?.response === 'pending') {
+    return (
+      <div class="meetup">
+        <span class="meetup-text">Meetup suggested: {label}</span>
+      </div>
+    );
+  }
+  if (mine?.response !== 'in' || mine.pickup_spot === label) return null;
+
+  const run = async (op: () => Promise<AppState>) => {
+    setBusy(true);
+    await apply(op);
+    setBusy(false);
+  };
+  const accept = () => void run(() => setParticipation(trip.id, 'in', label));
+
+  if (mine.meetup_declined) {
+    return (
+      <div class="meetup declined">
+        <span>Meetup suggested: {label}</span>
+        {!readOnly && (
+          <button class="link" disabled={busy} onClick={accept}>
+            Accept
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div class="meetup">
+      <span class="meetup-text">Meetup suggested: {label}</span>
+      {!readOnly && (
+        <>
+          <button class="primary" disabled={busy} onClick={accept}>
+            Accept
+          </button>
+          <button disabled={busy} onClick={() => void run(() => declineMeetup(trip.id))}>
+            Keep mine
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
 function RiderControls({ trip, me, spots, apply }: CardProps) {
   const mine = trip.riders.find((r) => r.id === me.id);
   const response = mine?.response ?? 'pending';
-  const [spot, setSpot] = useState(mine?.pickup_spot ?? '');
+  // A pending rider's select starts on the driver's meetup spot, so "I'm in"
+  // joins there; a spot of the rider's own always wins.
+  const defaultSpot =
+    mine?.pickup_spot ?? (response === 'pending' ? trip.meetup_label : null) ?? '';
+  const [spot, setSpot] = useState(defaultSpot);
   const [suggested, setSuggested] = useState(mine?.suggested_etd ?? '');
   const [note, setNote] = useState(mine?.note ?? '');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setSpot(mine?.pickup_spot ?? '');
-  }, [mine?.pickup_spot]);
+    setSpot(defaultSpot);
+  }, [defaultSpot]);
   useEffect(() => {
     setSuggested(mine?.suggested_etd ?? '');
   }, [mine?.suggested_etd]);
@@ -1066,9 +1152,10 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
   );
 }
 
-function DriverControls({ trip, apply }: { trip: Trip; apply: CardProps['apply'] }) {
+function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
   const [etd, setEtdValue] = useState(trip.etd);
   const [note, setNote] = useState(trip.note ?? '');
+  const [meetup, setMeetupValue] = useState(trip.meetup_label ?? '');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -1077,11 +1164,22 @@ function DriverControls({ trip, apply }: { trip: Trip; apply: CardProps['apply']
   useEffect(() => {
     setNote(trip.note ?? '');
   }, [trip.note]);
+  useEffect(() => {
+    setMeetupValue(trip.meetup_label ?? '');
+  }, [trip.meetup_label]);
 
   const run = async (op: () => Promise<AppState>) => {
     setBusy(true);
-    await apply(op);
+    const ok = await apply(op);
     setBusy(false);
+    return ok;
+  };
+
+  const suggestMeetup = async (label: string) => {
+    setMeetupValue(label);
+    if (!(await run(() => setMeetup(trip.id, label === '' ? null : label)))) {
+      setMeetupValue(trip.meetup_label ?? '');
+    }
   };
 
   const etdChanged = etd !== trip.etd;
@@ -1133,6 +1231,26 @@ function DriverControls({ trip, apply }: { trip: Trip; apply: CardProps['apply']
           </button>
         </div>
       </div>
+
+      {!cancelled && (
+        <div class="row">
+          <label>Meetup</label>
+          <div class="field">
+            <select
+              value={meetup}
+              disabled={busy}
+              onChange={(e) => void suggestMeetup((e.target as HTMLSelectElement).value)}
+            >
+              <option value="">None</option>
+              {spots.map((s) => (
+                <option key={s.label} value={s.label}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       <div class="row">
         <label>Destination</label>
