@@ -2,7 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from './index';
 import type { User } from './db';
 import { copyFor, notifyChange } from './notify';
-import { bytesToB64url } from './push';
+import { bytesToB64url, pushToUsers, type PushPayload } from './push';
+
+// Calls through to the real pushToUsers; the wrapper only records each payload,
+// which is encrypted by the time it reaches fetch.
+vi.mock('./push', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./push')>();
+  return { ...actual, pushToUsers: vi.fn(actual.pushToUsers) };
+});
 
 // Valid subscription keys (the RFC 8291 user-agent key/secret) so encryptPayload
 // runs for real; the routing is what these tests assert.
@@ -345,5 +352,30 @@ describe('leaving copy', () => {
       title: 'Driver left at 07:42',
       body: 'Mon 5 Jan',
     });
+  });
+});
+
+describe('push link', () => {
+  it("gives each recipient their own link, anchored on the trip's card", async () => {
+    vi.mocked(pushToUsers).mockClear();
+    const db = fakeDb({
+      users: [
+        { id: 1, token: 't1' },
+        { id: 2, token: 't2' },
+        { id: 3, token: 't3' },
+      ],
+      participation: allPending,
+      subs: [],
+    });
+
+    await notifyChange(await vapidEnv(db), alice, trip, { kind: 'etd', etd: '07:30' });
+
+    const urls = vi
+      .mocked(pushToUsers)
+      .mock.calls.map(([, ids, payload]) => [ids[0], (payload as PushPayload).url]);
+    expect(urls.sort()).toEqual([
+      [2, '/?t=t2#trip-1'],
+      [3, '/?t=t3#trip-1'],
+    ]);
   });
 });

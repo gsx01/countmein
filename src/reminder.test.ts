@@ -238,6 +238,7 @@ describe('sendReminders', () => {
       expect(sent[id]).toMatchObject({
         title: 'No driver for tomorrow',
         body: expect.stringMatching(/^Fri 11 Sept? - can you drive\?$/),
+        url: `/?t=t${id}#trip-9`,
         tag: 'reminder-9',
       });
     }

@@ -1,6 +1,7 @@
 // Change-push routing: given an actor and the write they made, resolve the
 // recipients (who cross the driver/rider boundary for this trip), build each
-// recipient's payload (with their own /?t= link), and fan out. Best-effort - all
+// recipient's payload (their own /?t= link, anchored on the trip's card with
+// #trip-<id>), and fan out. Best-effort - all
 // failures are logged and swallowed so a push never affects the write response.
 
 import type { Env } from './index';
@@ -182,7 +183,7 @@ export async function notifyChange(
     const tag = `trip-${trip.id}`;
     await Promise.all(
       unique.map((r) => {
-        const payload: PushPayload = { title, body, url: `/?t=${r.token}`, tag };
+        const payload: PushPayload = { title, body, url: `/?t=${r.token}#trip-${trip.id}`, tag };
         return pushToUsers(env, [r.id], payload);
       }),
     );

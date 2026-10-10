@@ -106,7 +106,12 @@ async function remindTrip(env: Env, trip: EligibleTrip): Promise<void> {
   await Promise.all(
     recipients.map((r) => {
       const { title, body } = copyFor(r.kind, day);
-      const payload: PushPayload = { title, body, url: `/?t=${r.token}`, tag: `reminder-${trip.id}` };
+      const payload: PushPayload = {
+        title,
+        body,
+        url: `/?t=${r.token}#trip-${trip.id}`,
+        tag: `reminder-${trip.id}`,
+      };
       return pushToUsers(env, [r.id], payload);
     }),
   );
