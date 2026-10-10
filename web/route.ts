@@ -83,9 +83,26 @@ export function departureAt(trip: Trip): Date | null {
 // Directions API unless the route or departure actually changed.
 const etaCache = new Map<string, RouteResult>();
 
+type PointFormat = (pt: RoutePoint) => string;
+const coordOf: PointFormat = (pt) => `${pt.lat},${pt.lng}`;
+const pinOf: PointFormat = (pt) => `${coordOf(pt)},${pt.label},${pt.emoji ?? ''}`;
+
+function pointsSignature(p: RoutePoints, format: PointFormat): string {
+  const c = (pt: RoutePoint | null) => (pt ? format(pt) : '');
+  return `${c(p.driver)}|${p.pickups.map(c).join(';')}|${c(p.destination)}`;
+}
+
+// The ETA depends only on the coordinates, so a pin label/emoji edit stays a
+// cache hit (no Directions call).
 function etaSignature(p: RoutePoints, departure: Date | null): string {
-  const c = (pt: RoutePoint | null) => (pt ? `${pt.lat},${pt.lng}` : '');
-  return `${c(p.driver)}|${p.pickups.map(c).join(';')}|${c(p.destination)}|${departure?.getTime() ?? 'none'}`;
+  return `${pointsSignature(p, coordOf)}|${departure?.getTime() ?? 'none'}`;
+}
+
+// A content key for a trip's route: what the pins show plus the departure. Equal
+// keys mean a refetched state can keep the previous `points`, so the map's marker
+// and ETA effects don't re-run.
+export function routeKey(p: RoutePoints, trip: Pick<Trip, 'trip_date' | 'etd'>): string {
+  return `${pointsSignature(p, pinOf)}|${trip.trip_date}|${trip.etd}`;
 }
 
 // Directions rejects a past departureTime, so traffic-aware timing is used only

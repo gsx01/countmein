@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addSeconds, departureAt, fmtDuration, routePoints } from './route';
+import { addSeconds, departureAt, fmtDuration, routeKey, routePoints } from './route';
 import type { PickupSpot, Trip } from '../src/types';
 
 describe('fmtDuration', () => {
@@ -86,5 +86,38 @@ describe('routePoints', () => {
     } as unknown as Trip;
     const points = routePoints(trip, spots);
     expect(points.pickups.map((p) => p.label)).toEqual(['@East', '@West']);
+  });
+});
+
+describe('routeKey', () => {
+  const makeTrip = (pickup: string) =>
+    ({
+      trip_date: '2026-09-10',
+      etd: '08:00',
+      driver: { id: 9, name: 'Driver', address: 'x', lat: 0, lng: 0, emoji: null },
+      destination: { label: 'Office', lat: 0, lng: 1, place_id: null, emoji: null },
+      riders: [
+        { id: 1, name: 'A', response: 'in', pickup_spot: pickup, suggested_etd: null, note: null },
+      ],
+    }) as unknown as Trip;
+  const spots = () => [spot('@East', 0.8), spot('@West', 0.2)];
+  const keyOf = (trip: Trip, s: PickupSpot[]) => routeKey(routePoints(trip, s), trip);
+
+  it('is equal for the same data in new objects', () => {
+    expect(keyOf(makeTrip('@East'), spots())).toBe(keyOf(makeTrip('@East'), spots()));
+  });
+
+  it('changes when a rider moves pickup', () => {
+    expect(keyOf(makeTrip('@West'), spots())).not.toBe(keyOf(makeTrip('@East'), spots()));
+  });
+
+  it('changes when a pin emoji changes', () => {
+    const withEmoji = spots().map((s) => (s.label === '@East' ? { ...s, emoji: 'X' } : s));
+    expect(keyOf(makeTrip('@East'), withEmoji)).not.toBe(keyOf(makeTrip('@East'), spots()));
+  });
+
+  it('changes with the departure time', () => {
+    const later = { ...makeTrip('@East'), etd: '08:30' } as Trip;
+    expect(keyOf(later, spots())).not.toBe(keyOf(makeTrip('@East'), spots()));
   });
 });

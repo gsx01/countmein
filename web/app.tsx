@@ -36,6 +36,7 @@ import {
   computeEta,
   departureAt,
   fmtDuration,
+  routeKey,
   routePoints,
   type RoutePoints,
   type RouteResult,
@@ -1142,7 +1143,10 @@ function TripRoute({ trip, spots }: { trip: Trip; spots: PickupSpot[] }) {
   const [eta, setEta] = useState<RouteResult | null>(null);
   const [error, setError] = useState(false);
 
-  const points = useMemo(() => routePoints(trip, spots), [trip, spots]);
+  // Memoized on content, not on the trip object: a background refresh replaces
+  // every object, and identity would redraw all markers on each poll.
+  const fresh = routePoints(trip, spots);
+  const points = useMemo(() => fresh, [routeKey(fresh, trip)]);
   const pins = useMemo(() => buildPins(points), [points]);
 
   // Draw the pins and (once the ETA resolves) the road polyline. Depends on `eta`
