@@ -224,7 +224,14 @@ export function App() {
         <p class="centered">No upcoming trips.</p>
       ) : (
         state.trips.map((trip) => (
-          <TripCard key={trip.id} trip={trip} me={state.me} spots={state.spots} apply={apply} />
+          <TripCard
+            key={trip.id}
+            trip={trip}
+            me={state.me}
+            spots={state.spots}
+            apply={apply}
+            offline={offlineDataAt !== null}
+          />
         ))
       )}
 
@@ -742,9 +749,12 @@ interface CardProps {
   apply: (op: () => Promise<AppState>) => Promise<boolean>;
 }
 
-function TripCard({ trip, me, spots, apply }: CardProps) {
+function TripCard({ trip, me, spots, apply, offline }: CardProps & { offline: boolean }) {
   const cancelled = trip.status === 'cancelled';
   const iAmDriver = trip.driver?.id === me.id;
+  // Offline a write can't land, so the card behaves as if locked. "I'm leaving"
+  // is the exception: it is gated by neither.
+  const readOnly = trip.locked || offline;
   return (
     <section class={`card${cancelled ? ' cancelled' : ''}`}>
       <div class="top">
@@ -759,12 +769,12 @@ function TripCard({ trip, me, spots, apply }: CardProps) {
 
       <div class="driver">
         <span>Driver: {trip.driver ? trip.driver.name : 'no driver yet'}</span>
-        {!trip.locked && !iAmDriver && (
+        {!readOnly && !iAmDriver && (
           <button class="link" onClick={() => void apply(() => setDriver(trip.id, me.id))}>
             I'll drive
           </button>
         )}
-        {!trip.locked && iAmDriver && (
+        {!readOnly && iAmDriver && (
           <button class="link" onClick={() => void apply(() => setDriver(trip.id, null))}>
             Not me
           </button>
@@ -782,7 +792,7 @@ function TripCard({ trip, me, spots, apply }: CardProps) {
         </button>
       )}
 
-      {trip.note && !(iAmDriver && !trip.locked) && <p class="trip-note">{trip.note}</p>}
+      {trip.note && !(iAmDriver && !readOnly) && <p class="trip-note">{trip.note}</p>}
 
       <ul class="roster">
         {trip.riders.map((r) => {
@@ -801,7 +811,7 @@ function TripCard({ trip, me, spots, apply }: CardProps) {
                 {suggestion && (
                   <span class="suggestion">
                     suggests {suggestion}
-                    {iAmDriver && !trip.locked && suggestion !== trip.etd && (
+                    {iAmDriver && !readOnly && suggestion !== trip.etd && (
                       <button
                         class="link"
                         onClick={() => void apply(() => setEtd(trip.id, suggestion))}
@@ -812,7 +822,7 @@ function TripCard({ trip, me, spots, apply }: CardProps) {
                   </span>
                 )}
                 {r.note && <span class="rider-note">"{r.note}"</span>}
-                {!trip.locked && r.id !== me.id && (
+                {!readOnly && r.id !== me.id && (
                   <button class="link" onClick={() => void apply(() => setDriver(trip.id, r.id))}>
                     Make driver
                   </button>
@@ -825,10 +835,10 @@ function TripCard({ trip, me, spots, apply }: CardProps) {
 
       {!cancelled && <TripRoute trip={trip} spots={spots} />}
 
-      {!trip.locked && !iAmDriver && !cancelled && (
+      {!readOnly && !iAmDriver && !cancelled && (
         <RiderControls trip={trip} me={me} spots={spots} apply={apply} />
       )}
-      {!trip.locked && iAmDriver && <DriverControls trip={trip} apply={apply} />}
+      {!readOnly && iAmDriver && <DriverControls trip={trip} apply={apply} />}
     </section>
   );
 }
