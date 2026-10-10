@@ -51,6 +51,7 @@ import {
 } from './push-client';
 import { useResumeRefresh } from './resume';
 import { loadCachedState, saveState } from './state-cache';
+import { classify, createLeaveQueue, type LeaveEntry } from './leave-queue';
 
 const NOTE_MAX = 280;
 
@@ -84,6 +85,14 @@ function formatDataAt(iso: string): string {
 }
 
 const isNetworkError = (err: unknown) => err instanceof ApiError && err.status === 0;
+
+const leaveQueue = createLeaveQueue(
+  {
+    getItem: (key) => localStorage.getItem(key),
+    setItem: (key, value) => localStorage.setItem(key, value),
+  },
+  getToken() ?? '',
+);
 
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -162,6 +171,59 @@ export function App() {
     [receive],
   );
 
+  const [queuedLeaves, setQueuedLeaves] = useState(() => leaveQueue.entries());
+  const flushing = useRef(false);
+
+  // Sends every queued "I'm leaving" tap with its tap time. An entry leaves the
+  // queue once it landed (or an earlier attempt did) or can never land; network
+  // and server errors keep it for the next flush.
+  const flushLeaves = useCallback(async () => {
+    if (flushing.current) return;
+    flushing.current = true;
+    const tried = new Set<number>();
+    try {
+      for (;;) {
+        const entry = leaveQueue.entries().find((e) => !tried.has(e.tripId));
+        if (!entry) break;
+        tried.add(entry.tripId);
+        try {
+          receive(await setLeaving(entry.tripId, entry.leftAt));
+          leaveQueue.remove(entry.tripId);
+          setBanner(null);
+        } catch (err) {
+          const status = err instanceof ApiError ? err.status : 0;
+          const message = err instanceof Error ? err.message : 'error';
+          const outcome = classify(status, message);
+          if (outcome === 'retry') {
+            if (status === 0 && dataAt.current) setOfflineDataAt(dataAt.current);
+            continue;
+          }
+          leaveQueue.remove(entry.tripId);
+          if (status === 401) setAuthError(true);
+          else if (outcome === 'done') void refresh();
+          else setBanner(`"I'm leaving" was not sent: ${message}`);
+        }
+      }
+    } finally {
+      flushing.current = false;
+      if (tried.size > 0) setQueuedLeaves(leaveQueue.entries());
+    }
+  }, [receive, refresh]);
+
+  // The tap is stored before any network call, so it survives no connection.
+  const leave = useCallback(
+    (trip: Trip) => {
+      leaveQueue.enqueue({
+        tripId: trip.id,
+        tripDate: trip.trip_date,
+        leftAt: new Date().toISOString(),
+      });
+      setQueuedLeaves(leaveQueue.entries());
+      void flushLeaves();
+    },
+    [flushLeaves],
+  );
+
   useEffect(() => {
     if (!hasToken()) {
       setAuthError(true);
@@ -231,6 +293,8 @@ export function App() {
             spots={state.spots}
             apply={apply}
             offline={offlineDataAt !== null}
+            pendingLeave={queuedLeaves.find((e) => e.tripId === trip.id) ?? null}
+            onLeave={() => leave(trip)}
           />
         ))
       )}
@@ -749,7 +813,13 @@ interface CardProps {
   apply: (op: () => Promise<AppState>) => Promise<boolean>;
 }
 
-function TripCard({ trip, me, spots, apply, offline }: CardProps & { offline: boolean }) {
+interface TripCardProps extends CardProps {
+  offline: boolean;
+  pendingLeave: LeaveEntry | null;
+  onLeave: () => void;
+}
+
+function TripCard({ trip, me, spots, apply, offline, pendingLeave, onLeave }: TripCardProps) {
   const cancelled = trip.status === 'cancelled';
   const iAmDriver = trip.driver?.id === me.id;
   // Offline a write can't land, so the card behaves as if locked. "I'm leaving"
@@ -786,11 +856,18 @@ function TripCard({ trip, me, spots, apply, offline }: CardProps & { offline: bo
       {iAmDriver && !cancelled && trip.left_at && (
         <div class="leaving">Left {formatTime(trip.left_at)}</div>
       )}
-      {iAmDriver && !cancelled && !trip.left_at && trip.trip_date === localToday() && (
-        <button class="leaving" onClick={() => void apply(() => setLeaving(trip.id))}>
-          I'm leaving
-        </button>
+      {iAmDriver && !cancelled && !trip.left_at && pendingLeave && (
+        <div class="leaving">Left {formatTime(pendingLeave.leftAt)} - sending...</div>
       )}
+      {iAmDriver &&
+        !cancelled &&
+        !trip.left_at &&
+        !pendingLeave &&
+        trip.trip_date === localToday() && (
+          <button class="leaving" onClick={onLeave}>
+            I'm leaving
+          </button>
+        )}
 
       {trip.note && !(iAmDriver && !readOnly) && <p class="trip-note">{trip.note}</p>}
 
