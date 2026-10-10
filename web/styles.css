@@ -358,6 +358,7 @@ header.app .push {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  /* One control high, so a text-only field centres on its side label. */
   min-height: 36px;
 }
 
@@ -375,6 +376,10 @@ header.app .push {
 
   .row > label {
     padding: 0;
+  }
+
+  .field {
+    min-height: 0;
   }
 
   .actions {
@@ -491,10 +496,6 @@ button.link {
     margin-block: -10px;
   }
 
-  .field {
-    min-height: 44px;
-  }
-
   .pref-row {
     min-height: 44px;
     padding: 0;
@@ -504,6 +505,10 @@ button.link {
 @media (pointer: coarse) and (min-width: 480px) {
   .row > label {
     padding: 12px 0;
+  }
+
+  .field {
+    min-height: 44px;
   }
 }
 
