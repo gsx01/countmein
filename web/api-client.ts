@@ -189,6 +189,17 @@ export const setDestination = (tripId: number, destination: DestinationInput | n
     body: JSON.stringify({ destination }),
   });
 
+// The driver suggests a meetup spot (a pickup label), or null to clear it.
+export const setMeetup = (tripId: number, label: string | null) =>
+  call(`/trips/${tripId}/meetup`, {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });
+
+// An "in" rider keeps their own spot instead of the driver's meetup suggestion.
+export const declineMeetup = (tripId: number) =>
+  call(`/trips/${tripId}/meetup/decline`, { method: 'POST' });
+
 // Admin-only user management. GET returns just the user list; the writes return
 // { state, users } so the roster and the admin panel refresh together.
 export const getUsers = () => call<UsersResponse>('/users');
