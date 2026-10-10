@@ -50,7 +50,7 @@ import {
   pushSupported,
 } from './push-client';
 import { useResumeRefresh } from './resume';
-import { saveState } from './state-cache';
+import { loadCachedState, saveState } from './state-cache';
 
 const NOTE_MAX = 280;
 
@@ -77,19 +77,33 @@ const timeFmt = new Intl.DateTimeFormat('en-GB', {
 });
 const formatTime = (iso: string) => timeFmt.format(new Date(iso));
 
+// When the shown data was fetched: HH:MM today, with the date once it is older.
+function formatDataAt(iso: string): string {
+  const day = todayFmt.format(new Date(iso));
+  return day === localToday() ? formatTime(iso) : `${formatDate(day)} ${formatTime(iso)}`;
+}
+
+const isNetworkError = (err: unknown) => err instanceof ApiError && err.status === 0;
+
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [authError, setAuthError] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Non-null while offline: the fetch time of the (cached or last) state shown.
+  const [offlineDataAt, setOfflineDataAt] = useState<string | null>(null);
   const lastFetchAt = useRef(0);
+  const dataAt = useRef<string | null>(null);
 
   // Every fresh state from the server lands here, so the offline cache always
   // holds the latest one.
   const receive = useCallback((next: AppState) => {
+    const now = new Date();
     setState(next);
+    setOfflineDataAt(null);
+    dataAt.current = now.toISOString();
     const token = getToken();
-    if (token) saveState(token, next, new Date());
+    if (token) saveState(token, next, now);
   }, []);
 
   const load = useCallback(async () => {
@@ -100,8 +114,13 @@ export function App() {
       setAuthError(false);
       setBanner(null);
     } catch (err) {
+      const cached = isNetworkError(err) ? loadCachedState(getToken() ?? '') : null;
       if (err instanceof ApiError && err.status === 401) setAuthError(true);
-      else setBanner(err instanceof Error ? err.message : 'error');
+      else if (cached) {
+        setState(cached.state);
+        dataAt.current = cached.savedAt;
+        setOfflineDataAt(cached.savedAt);
+      } else setBanner(err instanceof Error ? err.message : 'error');
     } finally {
       setLoading(false);
     }
@@ -110,13 +129,18 @@ export function App() {
   // A background refetch: unlike `load` it never flips `loading`, so the tree (open
   // maps, typed drafts) stays mounted, and a failure keeps the current state.
   const refresh = useCallback(async () => {
+    const previousFetchAt = lastFetchAt.current;
     lastFetchAt.current = Date.now();
     try {
       receive(await getState());
       setAuthError(false);
       return true;
     } catch (err) {
+      // A failed attempt must not throttle the next trigger (the `online` event
+      // when the connection comes back).
+      lastFetchAt.current = previousFetchAt;
       if (err instanceof ApiError && err.status === 401) setAuthError(true);
+      else if (isNetworkError(err) && dataAt.current) setOfflineDataAt(dataAt.current);
       return false;
     }
   }, [receive]);
@@ -158,8 +182,17 @@ export function App() {
     );
   }
 
-  if (loading || !state) {
+  if (loading) {
     return <div class="centered">Loading...</div>;
+  }
+
+  if (!state) {
+    return (
+      <div class="centered">
+        <p>{banner ?? 'error'}</p>
+        <button onClick={() => void load()}>Retry</button>
+      </div>
+    );
   }
 
   return (
@@ -172,6 +205,13 @@ export function App() {
           <PushToggle />
         </span>
       </header>
+
+      {offlineDataAt && (
+        <div class="banner">
+          <span>Offline - data from {formatDataAt(offlineDataAt)}</span>
+          <button onClick={() => void refresh()}>Retry</button>
+        </div>
+      )}
 
       {banner && (
         <div class="banner">
