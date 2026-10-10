@@ -41,7 +41,7 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
   `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`, `manifest.webmanifest`,
   `favicon.png`). `maps.ts` lazily loads the Google Maps SDK; `route.ts` computes
   the ETA and pin order.
-- `migrations/` (`0001_init.sql` .. `0014_notify_prefs.sql`), `scripts/seed.mjs`,
+- `migrations/` (`0001_init.sql` .. `0015_meetup.sql`), `scripts/seed.mjs`,
   `scripts/gen-vapid.mjs`.
 
 ## Key invariants
@@ -69,8 +69,20 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
   enabled user has a participation row on every trip; the driver's row is hidden
   (the driver is implicitly `in`). `ensureTrips` defaults the driver (last
   same-weekday driver if enabled -> any enabled admin -> null). Auth for ETD /
-  note / destination / cancel / leaving is `user.id === trip.driver_id`;
+  note / destination / meetup / cancel / leaving is `user.id === trip.driver_id`;
   `users.is_admin` gates user management.
+- Meetup suggestion: the driver may suggest one spot per trip
+  (`trips.meetup_label`) from the live pickup list via `POST
+  /api/trips/:id/meetup` `{ label | null }` (unknown label 400, locked/cancelled
+  409). It changes nobody's pickup. Accepting is derived, not stored: a rider has
+  accepted when `pickup_spot === meetup_label`, and the client accepts through the
+  participation route. Only "Keep mine" is stored: `POST
+  /api/trips/:id/meetup/decline` (no body; the driver 403; not `in`, locked,
+  cancelled or no live suggestion 409) sets `participation.meetup_declined`, and
+  any label change resets it to 0 for everyone. The suggestion survives a driver
+  change. `buildState` returns `meetup_label: null` when the stored label is not
+  in the live spot list, without clearing it. A pending rider's pickup select is
+  preselected to the suggestion unless they have a spot of their own.
 - Notes: one driver `trips.note` and one `participation.note` per rider, trimmed,
   <= 280 chars (empty -> NULL). Riders may suggest an ETD; the driver applies it
   by posting to the ETD route.
@@ -86,8 +98,9 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
   the subscription, no retry):
   - On-change (`notify.ts`): a write pushes only when it changes the stored value.
     A rider action notifies the driver; a driver action (ETD, trip-note, cancel,
-    leaving) notifies the non-out riders; a driver change also notifies the
-    previous driver. The actor is never pushed.
+    leaving, meetup set or changed) notifies the non-out riders; a driver change
+    also notifies the previous driver. Clearing a meetup or declining it pushes
+    nothing. The actor is never pushed.
   - Evening reminder (`reminder.ts`, gated in `cron.ts` to Amsterdam-local 20:00):
     for tomorrow's live trips, nudges pending riders and confirms to `in` riders +
     the driver. Claimed once per trip (`reminder_sent_at`) before sending.
