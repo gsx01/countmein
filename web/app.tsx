@@ -90,6 +90,20 @@ function formatDataAt(iso: string): string {
 
 const isNetworkError = (err: unknown) => err instanceof ApiError && err.status === 0;
 
+// A failed write as a sentence for the user; the API words its errors in
+// lowercase fragments ("a trip already exists for that date").
+function writeErrorText(err: unknown): string {
+  if (isNetworkError(err)) return 'No connection - not saved.';
+  const msg = err instanceof Error && err.message ? err.message : 'Something went wrong';
+  const text = msg.charAt(0).toUpperCase() + msg.slice(1);
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+// Runs a write and applies the fresh state it returns. On failure the message
+// goes to `onError` (shown inline by the form or card that wrote), or to the
+// page banner when there is none; resolves to whether it succeeded.
+type Apply = (op: () => Promise<AppState>, onError?: (message: string) => void) => Promise<boolean>;
+
 const LEAVE_RETRY_MS = [15_000, 30_000, 60_000];
 
 const leaveQueue = createLeaveQueue(
@@ -160,17 +174,14 @@ export function App() {
     }
   }, [receive]);
 
-  // Any write returns fresh full state; apply it (true), or surface the error
-  // (false) so a caller can keep its form open on failure.
-  const apply = useCallback(
-    async (op: () => Promise<AppState>) => {
+  const apply = useCallback<Apply>(
+    async (op, onError) => {
       try {
         receive(await op());
-        setBanner(null);
         return true;
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) setAuthError(true);
-        else setBanner(err instanceof Error ? err.message : 'error');
+        else (onError ?? setBanner)(writeErrorText(err));
         return false;
       }
     },
@@ -338,7 +349,7 @@ export function App() {
       {banner && (
         <div class="banner">
           <span>{banner}</span>
-          <button onClick={() => void refresh().then((ok) => ok && setBanner(null))}>Retry</button>
+          <button onClick={() => setBanner(null)}>Dismiss</button>
         </div>
       )}
 
@@ -368,11 +379,27 @@ export function App() {
   );
 }
 
-function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<boolean> }) {
+// A failed write's message where it happened, scrolled into view in case the
+// control that wrote sits far from it.
+function FormError({ message, class: cls }: { message: string | null; class?: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (message) ref.current?.scrollIntoView({ block: 'nearest' });
+  }, [message]);
+  if (!message) return null;
+  return (
+    <p class={cls ? `form-error ${cls}` : 'form-error'} role="alert" ref={ref}>
+      {message}
+    </p>
+  );
+}
+
+function AddTrip({ apply }: { apply: Apply }) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState('');
   const [etd, setEtd] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const id = useId();
 
   if (!open) {
@@ -385,7 +412,8 @@ function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<bo
 
   const submit = async () => {
     setBusy(true);
-    const ok = await apply(() => createTrip(date, etd));
+    setError(null);
+    const ok = await apply(() => createTrip(date, etd), setError);
     setBusy(false);
     // Keep the form (and the entered date/ETD) on failure - e.g. a duplicate or
     // past date - so the error is fixable rather than lost.
@@ -396,8 +424,13 @@ function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<bo
     }
   };
 
+  const close = () => {
+    setOpen(false);
+    setError(null);
+  };
+
   return (
-    <Panel class="add-trip-form" title="Add a one-off trip" onClose={() => setOpen(false)}>
+    <Panel class="add-trip-form" title="Add a one-off trip" onClose={close}>
       <div class="row">
         <label for={`${id}-date`}>Date</label>
         <div class="field">
@@ -422,6 +455,7 @@ function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<bo
           />
         </div>
       </div>
+      <FormError message={error} class="actions" />
       <div class="field actions">
         <button
           class="primary"
@@ -475,7 +509,7 @@ function AdminPanel({ onState }: { onState: (s: AppState) => void }) {
     if (!open || users !== null) return;
     getUsers()
       .then((r) => setUsers(r.users))
-      .catch((e) => setError(e instanceof Error ? e.message : 'error'));
+      .catch((e) => setError(writeErrorText(e)));
   }, [open, users]);
 
   const run = useCallback<Run>(
@@ -488,7 +522,7 @@ function AdminPanel({ onState }: { onState: (s: AppState) => void }) {
         setUsers(res.users);
         return true;
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'error');
+        setError(writeErrorText(e));
         return false;
       } finally {
         setBusy(false);
@@ -507,7 +541,7 @@ function AdminPanel({ onState }: { onState: (s: AppState) => void }) {
 
   return (
     <Panel class="admin" title="Users" onClose={() => setOpen(false)}>
-      {error && <p class="admin-error">{error}</p>}
+      <FormError message={error} />
       {users === null ? (
         <p class="admin-loading">Loading...</p>
       ) : (
@@ -788,10 +822,11 @@ function NotifySettings({
   apply,
 }: {
   me: AppState['me'];
-  apply: (op: () => Promise<AppState>) => Promise<boolean>;
+  apply: Apply;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!open) {
     return (
@@ -803,12 +838,19 @@ function NotifySettings({
 
   const toggle = async (key: NotifyCategory, value: boolean) => {
     setBusy(true);
-    await apply(() => updatePrefs({ [key]: value }));
+    setError(null);
+    await apply(() => updatePrefs({ [key]: value }), setError);
     setBusy(false);
   };
 
+  const close = () => {
+    setOpen(false);
+    setError(null);
+  };
+
   return (
-    <Panel class="prefs" title="Notification settings" onClose={() => setOpen(false)}>
+    <Panel class="prefs" title="Notification settings" onClose={close}>
+      <FormError message={error} />
       {PREF_ROWS.map(({ key, label }) => (
         <label key={key} class="pref-row">
           <input
@@ -895,7 +937,7 @@ interface CardProps {
   trip: Trip;
   me: AppState['me'];
   spots: PickupSpot[];
-  apply: (op: () => Promise<AppState>) => Promise<boolean>;
+  apply: Apply;
 }
 
 interface TripCardProps extends CardProps {
@@ -904,7 +946,24 @@ interface TripCardProps extends CardProps {
   onLeave: () => void;
 }
 
-function TripCard({ trip, me, spots, apply, offline, pendingLeave, onLeave }: TripCardProps) {
+function TripCard({
+  trip,
+  me,
+  spots,
+  apply: pageApply,
+  offline,
+  pendingLeave,
+  onLeave,
+}: TripCardProps) {
+  // Every write from this card reports its failure on the card itself.
+  const [error, setError] = useState<string | null>(null);
+  const apply = useCallback<Apply>(
+    (op) => {
+      setError(null);
+      return pageApply(op, setError);
+    },
+    [pageApply],
+  );
   const cancelled = trip.status === 'cancelled';
   const iAmDriver = trip.driver?.id === me.id;
   // Offline a write can't land, so the card behaves as if locked. "I'm leaving"
@@ -1020,6 +1079,8 @@ function TripCard({ trip, me, spots, apply, offline, pendingLeave, onLeave }: Tr
         <RiderControls trip={trip} me={me} spots={spots} apply={apply} />
       )}
       {!readOnly && iAmDriver && <DriverControls trip={trip} spots={spots} apply={apply} />}
+
+      <FormError message={error} />
     </section>
   );
 }

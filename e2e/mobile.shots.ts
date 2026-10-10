@@ -94,13 +94,13 @@ for (const who of ['rider', 'driver'] as Who[]) {
   });
 }
 
-test('error banner', async ({ page }, testInfo) => {
+test('add-trip error', async ({ page }, testInfo) => {
   await as(page, 'rider', SOON);
   await page.getByRole('button', { name: 'Add a one-off trip', exact: true }).click();
   await page.locator('.add-trip-form input[type="date"]').fill(localDatePlus(new Date(), 1));
   await page.locator('.add-trip-form input[type="time"]').fill('09:00');
   await page.getByRole('button', { name: 'Add trip', exact: true }).click();
-  await expect(page.locator('.banner')).toBeVisible();
+  await expect(page.locator('.add-trip-form .form-error')).toBeVisible();
   await shoot(page, testInfo, 'error');
 });
 

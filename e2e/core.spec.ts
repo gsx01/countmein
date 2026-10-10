@@ -1,3 +1,4 @@
+import { localDatePlus } from '../src/time';
 import {
   apiTrip,
   as,
@@ -107,6 +108,27 @@ test('the leave queue sends an offline tap once back online', async ({ page, con
   const leftAt = (await apiTrip('driver', TODAY)).left_at;
   expect(leftAt).not.toBeNull();
   expect(hhmm(leftAt ?? '')).toBe(tapped);
+  await pause(page);
+});
+
+test('a failed write shows its error where it was made', async ({ page }) => {
+  await as(page, 'rider', T, 'add a one-off trip on a date that has one');
+  await page.getByRole('button', { name: 'Add a one-off trip', exact: true }).click();
+  await page.locator('.add-trip-form input[type="date"]').fill(localDatePlus(new Date(), 2));
+  await page.locator('.add-trip-form input[type="time"]').fill('09:00');
+  await page.getByRole('button', { name: 'Add trip', exact: true }).click();
+  await expect(page.locator('.add-trip-form .form-error')).toHaveText(
+    'A trip already exists for that date.',
+  );
+  await expect(page.locator('.banner')).toHaveCount(0);
+
+  await say(page, `${USERS.rider.role}: a card write the server rejects`);
+  await page.route(`**/api/trips/${T}/driver`, (route) =>
+    route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":"trip locked"}' }),
+  );
+  await card(page, T).getByRole('button', { name: "I'll drive", exact: true }).click();
+  await expect(card(page, T).locator('.form-error')).toHaveText('Trip locked.');
+  await expect(page.locator('.banner')).toHaveCount(0);
   await pause(page);
 });
 

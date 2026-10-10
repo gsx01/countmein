@@ -530,10 +530,14 @@ button:disabled {
   cursor: pointer;
 }
 
-.admin-error {
+.form-error {
   color: var(--danger);
   font-size: 14px;
   margin: 0;
+}
+
+.controls + .form-error {
+  margin-top: 12px;
 }
 
 .admin-loading {
