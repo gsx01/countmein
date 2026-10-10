@@ -267,6 +267,67 @@ describe('notifyChange routing', () => {
   });
 });
 
+describe('meetup suggestion', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const users = [
+    { id: 1, token: 't1' },
+    { id: 2, token: 't2' },
+    { id: 3, token: 't3' },
+    { id: 4, token: 't4' },
+  ];
+  const subs = [
+    { id: 10, user_id: 1, endpoint: 'https://push.test/alice' },
+    { id: 11, user_id: 2, endpoint: 'https://push.test/bob' },
+    { id: 12, user_id: 3, endpoint: 'https://push.test/carol' },
+    { id: 13, user_id: 4, endpoint: 'https://push.test/dave' },
+  ];
+  const mixed = [
+    { user_id: 1, response: 'pending' },
+    { user_id: 2, response: 'in' },
+    { user_id: 3, response: 'pending' },
+    { user_id: 4, response: 'out' },
+  ];
+
+  it('routes to the in and pending riders, not the out rider or the driver', async () => {
+    const env = await vapidEnv(fakeDb({ users, participation: mixed, subs }));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 201 }));
+
+    await notifyChange(env, alice, trip, { kind: 'meetup', label: '@Bob' });
+
+    expect(endpointsHit(fetchMock)).toEqual([
+      'https://push.test/bob',
+      'https://push.test/carol',
+    ]);
+  });
+
+  it('drops a rider who opted out of driver updates', async () => {
+    const env = await vapidEnv(
+      fakeDb({
+        users: users.map((u) => (u.id === 2 ? { ...u, optOut: ['pref_driver_updates'] } : u)),
+        participation: mixed,
+        subs,
+      }),
+    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 201 }));
+
+    await notifyChange(env, alice, trip, { kind: 'meetup', label: '@Bob' });
+
+    expect(endpointsHit(fetchMock)).toEqual(['https://push.test/carol']);
+  });
+
+  it('names the driver and the spot, with the day as body', () => {
+    expect(copyFor(alice, 'Mon 5 Jan', { kind: 'meetup', label: '@Bob' })).toEqual({
+      title: 'Alice suggests meeting at @Bob',
+      body: 'Mon 5 Jan',
+    });
+  });
+});
+
 describe('leaving copy', () => {
   const now = new Date('2026-01-05T07:00:00.000Z');
 

@@ -93,7 +93,7 @@ const TRIP_ACTIONS: Record<string, TripAction> = {
   leaving,
   destination: (request, env, _ctx, user, tripId, now) =>
     editDestination(request, env, user, tripId, now),
-  meetup: (request, env, _ctx, user, tripId, now) => editMeetup(request, env, user, tripId, now),
+  meetup: editMeetup,
   'meetup/decline': (_request, env, _ctx, user, tripId, now) =>
     declineMeetup(env, user, tripId, now),
 };
@@ -724,9 +724,11 @@ async function editDestination(
 
 // Set or clear the driver's meetup suggestion: a live pickup label, or null. A
 // change resets every rider's "keep mine", since they declined the old spot.
+// Setting or changing it pushes the non-out riders; clearing it does not.
 async function editMeetup(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   user: User,
   tripId: number,
   now: Date,
@@ -749,6 +751,10 @@ async function editMeetup(
     env.DB.prepare('UPDATE trips SET meetup_label = ? WHERE id = ?').bind(label, tripId),
     env.DB.prepare('UPDATE participation SET meetup_declined = 0 WHERE trip_id = ?').bind(tripId),
   ]);
+
+  if (label !== null) {
+    ctx.waitUntil(notifyChange(env, user, trip, { kind: 'meetup', label }));
+  }
 }
 
 // An "in" rider keeps their own spot instead of the driver's live meetup

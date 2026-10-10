@@ -15,6 +15,7 @@ export type NotifyAction =
   | { kind: 'trip-note'; note: string | null }
   | { kind: 'driver'; previous: number | null; driverName: string | null }
   | { kind: 'leaving'; leftAt: string }
+  | { kind: 'meetup'; label: string }
   | { kind: 'participation'; response: 'in' | 'out'; spot: string | null }
   | { kind: 'suggestion'; suggested: string | null }
   | { kind: 'rider-note'; note: string | null };
@@ -26,7 +27,8 @@ const isDriverAction = (kind: NotifyAction['kind']) =>
   kind === 'cancel' ||
   kind === 'trip-note' ||
   kind === 'driver' ||
-  kind === 'leaving';
+  kind === 'leaving' ||
+  kind === 'meetup';
 
 // The preference category each action kind belongs to. One place owns this map so
 // routing and pref-filtering can't drift (the reminder owns 'evening_reminder').
@@ -36,6 +38,7 @@ const CATEGORY_BY_KIND: Record<NotifyAction['kind'], NotifyCategory> = {
   'trip-note': 'driver_updates',
   driver: 'driver_assignment',
   leaving: 'driver_leaving',
+  meetup: 'driver_updates',
   participation: 'rider_responses',
   suggestion: 'rider_notes',
   'rider-note': 'rider_notes',
@@ -103,6 +106,8 @@ export function copyFor(
         ? { title: `Driver left at ${localHHMM(leftAt)}`, body: day }
         : { title: 'Driver is leaving now', body: day };
     }
+    case 'meetup':
+      return { title: `${actor.name} suggests meeting at ${action.label}`, body: day };
     case 'participation':
       return action.response === 'in'
         ? { title: `${actor.name} is in`, body: `${day}, pickup ${action.spot}` }
