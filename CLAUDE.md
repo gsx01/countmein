@@ -95,8 +95,8 @@ migrations are user-run too (`! npm run migrate`).
   cancelled or no live suggestion 409) sets `participation.meetup_declined`, and
   any label change resets it to 0 for everyone. The suggestion survives a driver
   change. `buildState` returns `meetup_label: null` when the stored label is not
-  in the live spot list, without clearing it. A pending rider's pickup select is
-  preselected to the suggestion unless they have a spot of their own.
+  in the live spot list, without clearing it. A rider who is not `in` (pending or
+  out) sees the suggestion as text, and their pickup select is preselected to it.
 - Notes: one driver `trips.note` and one `participation.note` per rider, trimmed,
   <= 280 chars (empty -> NULL). Riders may suggest an ETD; the driver applies it
   by posting to the ETD route.
