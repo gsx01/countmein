@@ -37,8 +37,8 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
 - `src/config.ts` - resolves the office destination from `OFFICE_DESTINATION`.
 - `src/constants.ts`, `src/types.ts` - shared by Worker and web.
 - `web/` - Preact SPA (`app.tsx`, `api-client.ts`, `push-client.ts`, `maps.ts`,
-  `route.ts`, `resume.ts`, `state-cache.ts`, `leave-queue.ts`, `config.ts`,
-  `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`, `manifest.webmanifest`,
+  `route.ts`, `resume.ts`, `state-cache.ts`, `leave-queue.ts`, `trip-anchor.ts`,
+  `config.ts`, `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`, `manifest.webmanifest`,
   `favicon.png`). `maps.ts` lazily loads the Google Maps SDK; `route.ts` computes
   the ETA and pin order.
 - `migrations/` (`0001_init.sql` .. `0015_meetup.sql`), `scripts/seed.mjs`,
@@ -74,8 +74,8 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
 - Driver is PER-TRIP (`trips.driver_id`, nullable), not a global role. Any enabled
   user can drive and ANYONE can (re)assign via `POST /api/trips/:id/driver`. Every
   enabled user has a participation row on every trip; the driver's row is hidden
-  (the driver is implicitly `in`). `ensureTrips` defaults the driver (last
-  same-weekday driver if enabled -> any enabled admin -> null). Auth for ETD /
+  (the driver is implicitly `in`). New trips (auto and manual) start with no
+  driver; someone takes one via the driver route. Auth for ETD /
   note / destination / meetup / cancel / leaving is `user.id === trip.driver_id`;
   `users.is_admin` gates user management.
 - Meetup suggestion: the driver may suggest one spot per trip
@@ -110,11 +110,18 @@ or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to ru
     nothing. The actor is never pushed.
   - Evening reminder (`reminder.ts`, gated in `cron.ts` to Amsterdam-local 20:00):
     for tomorrow's live trips, nudges pending riders and confirms to `in` riders +
-    the driver. Claimed once per trip (`reminder_sent_at`) before sending.
+    the driver. A trip with no driver gets the no-driver alert ("No driver for
+    tomorrow" / "<day> - can you drive?") instead, to every non-out rider (in and
+    pending). Claimed once per trip (`reminder_sent_at`) before sending, so a
+    driver assigned (or lost) after 20:00 triggers no second reminder.
   Each user has a `pref_<category>` flag (six categories in `types.ts`); a push to
   a user who turned that category off is dropped. `PATCH /api/prefs` edits your own
-  flags. Sends run via `ctx.waitUntil`; payloads carry the recipient's own `/?t=`
-  link and are tagged so a newer push replaces the older one in the tray.
+  flags. Sends run via `ctx.waitUntil`; payloads carry the recipient's own
+  `/?t=<token>#trip-<id>` link and are tagged so a newer push replaces the older
+  one in the tray. The `#trip-<id>` anchor matches the card's `id`
+  (`web/trip-anchor.ts`): the app scrolls to it after the first load, and on a
+  `hashchange` (a push tapped while the app is open is a same-document
+  navigation) it runs a forced silent refresh first.
 - Resume and offline (client only):
   - `resume.ts` refetches silently (no `loading`, so open maps and drafts stay
     mounted) on `visibilitychange` -> visible, `pageshow` persisted, `online`,
