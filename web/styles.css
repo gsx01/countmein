@@ -84,6 +84,12 @@ header.app .who {
   margin-bottom: 14px;
 }
 
+/* Blocks carry a bottom margin to space them from the next one; the last one in a
+   card would otherwise add to the card's padding. */
+.card > :last-child {
+  margin-bottom: 0;
+}
+
 .card.cancelled {
   opacity: 0.6;
 }
@@ -171,8 +177,10 @@ header.app .who {
   flex: 0 0 auto;
 }
 
-.add-trip-form .field {
-  gap: 8px;
+.add-trip-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* The one-off trip's native date/time pickers: a fixed box matching the other
@@ -439,7 +447,7 @@ button:disabled {
 .admin-user {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   padding: 14px 0;
   border-top: 1px solid var(--border);
 }
