@@ -16,7 +16,7 @@ describe('POST /api/trips', () => {
     const res = await create({ trip_date: date, etd: '09:15' });
     expect(res.status).toBe(200);
     const t = res.json.trips.find((x) => x.trip_date === date);
-    expect(t).toMatchObject({ source: 'manual', etd: '09:15', status: 'scheduled' });
+    expect(t).toMatchObject({ source: 'manual', etd: '09:15', status: 'scheduled', driver: null });
     const rows = await query<{ users: string }>(
       "SELECT group_concat(user_id || ':' || response) AS users FROM (SELECT user_id, response FROM participation WHERE trip_id = ? ORDER BY user_id)",
       t?.id,

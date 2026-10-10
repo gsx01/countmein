@@ -68,6 +68,17 @@ describe('GET /api/state', () => {
     expect(dates).toEqual([...dates].sort());
   });
 
+  it('creates the auto trips on an empty DB with no driver', async () => {
+    const res = await state();
+    const auto = res.json.trips.filter((t) => t.source === 'auto');
+    expect(auto.length).toBeGreaterThan(0);
+    for (const t of auto) expect(t.driver).toBeNull();
+    const stored = await query<{ n: number }>(
+      'SELECT count(*) AS n FROM trips WHERE driver_id IS NOT NULL',
+    );
+    expect(stored?.n).toBe(0);
+  });
+
   it('flags locked trips', async () => {
     const L = await lockedTrip();
     const U = await trip();

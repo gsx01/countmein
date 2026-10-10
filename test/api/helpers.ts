@@ -41,7 +41,7 @@ export async function seedUsers(db: D1Database = env.DB): Promise<void> {
 
 // A manual trip `daysAhead` local days from today with every enabled user pending.
 // The defaults give an unlocked trip; { daysAhead: 0, etd: '00:00' } is locked.
-// The driver is always set explicitly, never left to defaultDriverId.
+// The driver defaults to DRIVER; pass { driverId: null } for a driverless trip.
 export async function trip(
   opts: { daysAhead?: number; etd?: string; driverId?: number | null } = {},
   db: D1Database = env.DB,
