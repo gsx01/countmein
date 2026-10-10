@@ -96,8 +96,14 @@ header.app .who {
   margin-bottom: 0;
 }
 
+/* Muted text, not opacity: the driver actions still work on a cancelled trip, so
+   they keep their full colour. */
 .card.cancelled {
-  opacity: 0.6;
+  color: var(--muted);
+}
+
+.card.cancelled .roster .status.in {
+  color: inherit;
 }
 
 .card .top {
