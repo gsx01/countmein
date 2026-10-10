@@ -64,25 +64,6 @@ describe('POST /api/trips/:id/etd', () => {
   });
 });
 
-describe('POST /api/trips/:id/trip-note', () => {
-  it('trims, and stores empty as null', async () => {
-    expect((await post('driver', T, 'trip-note', { note: '  bring snacks ' })).status).toBe(200);
-    expect((await tripRow(T))?.note).toBe('bring snacks');
-    expect((await post('driver', T, 'trip-note', { note: '' })).status).toBe(200);
-    expect((await tripRow(T))?.note).toBeNull();
-  });
-
-  it('rejects 281 chars', async () => {
-    expect((await post('driver', T, 'trip-note', { note: 'a'.repeat(281) })).status).toBe(400);
-  });
-
-  it('rejects a non-driver and a locked trip', async () => {
-    expect((await post('rider', T, 'trip-note', { note: 'x' })).status).toBe(403);
-    const L = await lockedTrip();
-    expect((await post('driver', L, 'trip-note', { note: 'x' })).status).toBe(409);
-  });
-});
-
 describe('POST /api/trips/:id/cancel', () => {
   it('cancels and restores', async () => {
     const res = await post('driver', T, 'cancel', { cancelled: true });
@@ -151,7 +132,6 @@ describe('driver action pushes', () => {
 
   it.each([
     ['etd', { etd: '07:15' }],
-    ['trip-note', { note: 'hello' }],
     ['cancel', { cancelled: true }],
   ])('%s pushes the non-out riders on change only', async (action, body) => {
     const spy = spyPush();

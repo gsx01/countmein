@@ -86,14 +86,12 @@ const TRIP_ACTIONS: Record<string, TripAction> = {
   participation,
   etd: editEtd,
   suggestion,
-  'trip-note': tripNote,
   'rider-note': riderNote,
   cancel,
   driver: setDriver,
   leaving,
   destination: (request, env, _ctx, user, tripId, now) =>
     editDestination(request, env, user, tripId, now),
-  meetup: editMeetup,
   'meetup/decline': (_request, env, _ctx, user, tripId, now) =>
     declineMeetup(env, user, tripId, now),
 };
@@ -600,26 +598,6 @@ function parseNote(body: Record<string, unknown>): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
-async function tripNote(
-  request: Request,
-  env: Env,
-  ctx: ExecutionContext,
-  user: User,
-  tripId: number,
-  now: Date,
-): Promise<void> {
-  const trip = await requireTrip(env.DB, tripId);
-  if (user.id !== trip.driver_id) throw new ApiError(403, 'only the trip driver');
-  if (isLocked(trip, now)) throw new ApiError(409, 'trip locked');
-
-  const note = parseNote(await readBody(request));
-  await env.DB.prepare('UPDATE trips SET note = ? WHERE id = ?').bind(note, tripId).run();
-
-  if (trip.note !== note) {
-    ctx.waitUntil(notifyChange(env, user, trip, { kind: 'trip-note', note }));
-  }
-}
-
 async function riderNote(
   request: Request,
   env: Env,
@@ -797,41 +775,6 @@ async function editDestination(
   )
     .bind(dest?.label ?? null, dest?.lat ?? null, dest?.lng ?? null, dest?.place_id ?? null, tripId)
     .run();
-}
-
-// Set or clear the driver's meetup suggestion: a live pickup label, or null. A
-// change resets every rider's "keep mine", since they declined the old spot.
-// Setting or changing it pushes the non-out riders; clearing it does not.
-async function editMeetup(
-  request: Request,
-  env: Env,
-  ctx: ExecutionContext,
-  user: User,
-  tripId: number,
-  now: Date,
-): Promise<void> {
-  const trip = await requireTrip(env.DB, tripId);
-  if (user.id !== trip.driver_id) throw new ApiError(403, 'only the trip driver');
-  if (trip.status === 'cancelled') throw new ApiError(409, 'trip cancelled');
-  if (isLocked(trip, now)) throw new ApiError(409, 'trip locked');
-
-  const label = (await readBody(request)).label;
-  if (
-    label !== null &&
-    (typeof label !== 'string' || !(await isKnownSpot(env.DB, label, resolveOffice(env))))
-  ) {
-    throw new ApiError(400, 'label must be a known spot or null');
-  }
-  if (trip.meetup_label === label) return;
-
-  await env.DB.batch([
-    env.DB.prepare('UPDATE trips SET meetup_label = ? WHERE id = ?').bind(label, tripId),
-    env.DB.prepare('UPDATE participation SET meetup_declined = 0 WHERE trip_id = ?').bind(tripId),
-  ]);
-
-  if (label !== null) {
-    ctx.waitUntil(notifyChange(env, user, trip, { kind: 'meetup', label }));
-  }
 }
 
 // An "in" rider keeps their own spot instead of the driver's live meetup
