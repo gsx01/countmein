@@ -17,6 +17,7 @@
     "test": "vitest run",
     "e2e": "playwright test -c e2e/playwright.config.ts",
     "e2e:video": "cross-env E2E_VIDEO=1 playwright test -c e2e/playwright.config.ts",
+    "e2e:shots": "cross-env E2E_SHOTS=1 playwright test -c e2e/playwright.config.ts",
     "seed": "node scripts/seed.mjs",
     "seed:staging": "node scripts/seed.mjs --remote --db countmein-staging"
   },

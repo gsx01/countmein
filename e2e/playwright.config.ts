@@ -1,5 +1,5 @@
-import { defineConfig } from '@playwright/test';
-import { BASE, CONFIG, PORT, ROOT, STATE, VIDEO } from './env';
+import { defineConfig, devices } from '@playwright/test';
+import { BASE, CONFIG, PORT, ROOT, SHOTS, STATE, VIDEO } from './env';
 
 const channel = process.env.PW_CHANNEL || undefined;
 
@@ -11,9 +11,19 @@ const serve = [
   `npx wrangler dev --config ${CONFIG} --persist-to ${STATE} --ip 127.0.0.1 --port ${PORT} --show-interactive-dev-session=false`,
 ].join(' && ');
 
+// iPhone descriptors default to WebKit; only the viewport, scale, UA and touch
+// matter for a layout check, so every device runs on Chromium.
+const SHOT_DEVICES = ['iPhone SE', 'iPhone 15', 'Pixel 7'];
+
 export default defineConfig({
   testDir: '.',
-  testMatch: '*.spec.ts',
+  testMatch: SHOTS ? '*.shots.ts' : '*.spec.ts',
+  projects: SHOTS
+    ? SHOT_DEVICES.map((name) => ({
+        name: name.toLowerCase().replace(/\s+/g, '-'),
+        use: { ...devices[name], browserName: 'chromium' as const, ...(channel ? { channel } : {}) },
+      }))
+    : undefined,
   outputDir: './test-results',
   workers: 1,
   fullyParallel: false,
