@@ -416,7 +416,7 @@ function AddTrip({ apply }: { apply: (op: () => Promise<AppState>) => Promise<bo
           />
         </div>
       </div>
-      <div class="field">
+      <div class="field actions">
         <button
           class="primary"
           disabled={busy || date === '' || etd === ''}
@@ -623,15 +623,17 @@ function UserRow({ user, busy, run }: { user: AdminUser; busy: boolean; run: Run
             value={link}
             onFocus={(e) => (e.target as HTMLInputElement).select()}
           />
-          <button disabled={busy} onClick={() => void copy()}>
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-          <button disabled={busy} onClick={() => void run(() => rotateUserToken(user.id))}>
-            Rotate
-          </button>
+          <span class="btn-group">
+            <button disabled={busy} onClick={() => void copy()}>
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+            <button disabled={busy} onClick={() => void run(() => rotateUserToken(user.id))}>
+              Rotate
+            </button>
+          </span>
         </div>
       </div>
-      <div class="admin-toggles">
+      <div class="admin-toggles actions">
         <button
           disabled={busy}
           onClick={() => void run(() => updateUser(user.id, { enabled: !user.enabled }))}
@@ -723,7 +725,7 @@ function AddUser({ busy, run }: { busy: boolean; run: Run }) {
           />
         </div>
       </div>
-      <div class="field">
+      <div class="field actions">
         <button
           class="primary"
           disabled={busy || name.trim() === '' || label.trim() === ''}
@@ -1114,23 +1116,25 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
               </option>
             ))}
           </select>
-          {response !== 'in' && (
-            <button
-              class="primary"
-              disabled={busy || spot === ''}
-              onClick={() => void run(() => setParticipation(trip.id, 'in', spot))}
-            >
-              I'm in
-            </button>
-          )}
-          {response !== 'out' && (
-            <button
-              disabled={busy}
-              onClick={() => void run(() => setParticipation(trip.id, 'out', null))}
-            >
-              I'm out
-            </button>
-          )}
+          <span class="btn-group">
+            {response !== 'in' && (
+              <button
+                class="primary"
+                disabled={busy || spot === ''}
+                onClick={() => void run(() => setParticipation(trip.id, 'in', spot))}
+              >
+                I'm in
+              </button>
+            )}
+            {response !== 'out' && (
+              <button
+                disabled={busy}
+                onClick={() => void run(() => setParticipation(trip.id, 'out', null))}
+              >
+                I'm out
+              </button>
+            )}
+          </span>
         </div>
       </div>
 
@@ -1143,18 +1147,20 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
             disabled={busy}
             onInput={(e) => setSuggested((e.target as HTMLInputElement).value)}
           />
-          <button
-            class="primary"
-            disabled={busy || suggested === '' || !suggestionChanged}
-            onClick={() => void run(() => setSuggestion(trip.id, suggested))}
-          >
-            Suggest
-          </button>
-          {mine?.suggested_etd && (
-            <button disabled={busy} onClick={() => void run(() => setSuggestion(trip.id, null))}>
-              Clear
+          <span class="btn-group">
+            <button
+              class="primary"
+              disabled={busy || suggested === '' || !suggestionChanged}
+              onClick={() => void run(() => setSuggestion(trip.id, suggested))}
+            >
+              Suggest
             </button>
-          )}
+            {mine?.suggested_etd && (
+              <button disabled={busy} onClick={() => void run(() => setSuggestion(trip.id, null))}>
+                Clear
+              </button>
+            )}
+          </span>
         </div>
       </div>
 
@@ -1227,16 +1233,18 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
             disabled={busy}
             onInput={(e) => setEtdValue((e.target as HTMLInputElement).value)}
           />
-          <button
-            class="primary"
-            disabled={busy || !etdChanged || etd === ''}
-            onClick={() => void run(() => setEtd(trip.id, etd))}
-          >
-            Save
-          </button>
-          <button disabled={busy} onClick={() => void run(() => setCancelled(trip.id, !cancelled))}>
-            {cancelled ? 'Uncancel' : 'Cancel'}
-          </button>
+          <span class="btn-group">
+            <button
+              class="primary"
+              disabled={busy || !etdChanged || etd === ''}
+              onClick={() => void run(() => setEtd(trip.id, etd))}
+            >
+              Save
+            </button>
+            <button disabled={busy} onClick={() => void run(() => setCancelled(trip.id, !cancelled))}>
+              {cancelled ? 'Uncancel' : 'Cancel'}
+            </button>
+          </span>
         </div>
       </div>
 

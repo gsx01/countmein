@@ -298,16 +298,19 @@ header.app .who {
   padding-top: 14px;
 }
 
+/* A label column beside the fields; the label is top-aligned and padded to sit
+   centred on the first control line, so a wrapping field doesn't move it. */
 .row {
   display: grid;
   grid-template-columns: 84px 1fr;
-  align-items: center;
+  align-items: start;
   gap: 12px;
 }
 
 .row > label {
   font-size: 13px;
   color: var(--muted);
+  padding: 8px 0;
 }
 
 .field {
@@ -316,6 +319,28 @@ header.app .who {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  min-height: 36px;
+}
+
+/* A row of form actions with no label of its own, lined up with the fields. */
+.actions {
+  margin-left: 96px;
+}
+
+/* Phones: labels go above the fields, so the controls get the full card width. */
+@media (max-width: 479px) {
+  .row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .row > label {
+    padding: 0;
+  }
+
+  .actions {
+    margin-left: 0;
+  }
 }
 
 button,
@@ -337,15 +362,23 @@ button {
   white-space: nowrap;
 }
 
-/* Pickup and Suggest-time share a width so the buttons after them line up. */
+/* Pickup and Suggest-time share a width so the buttons after them line up. 140px
+   keeps a select or time input plus two buttons on one line from a 393px phone. */
 .field select,
 .field input[type='time'] {
-  flex: 0 0 150px;
-  width: 150px;
+  flex: 0 1 140px;
+  width: 140px;
+  min-width: 0;
 }
 
 .field button {
   min-width: 76px;
+}
+
+/* Buttons that belong together wrap as one, below their input, never split. */
+.btn-group {
+  display: flex;
+  gap: 8px;
 }
 
 .field input[type='text'] {
@@ -354,7 +387,7 @@ button {
 }
 
 .field input.note-input {
-  flex: 1 1 200px;
+  flex: 1 1 140px;
 }
 
 button.primary {
