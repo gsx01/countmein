@@ -13,6 +13,8 @@ map. `CLAUDE.md` is the working guide to the layout and invariants.
   7-day window filled. It runs on every `GET /api/state` and from cron, so a
   fresh deploy is never empty and a missed cron self-heals. Any user can also add
   a one-off trip on any date.
+- A day can hold several trips (say, the usual morning run plus an afternoon trip
+  to an event elsewhere). Each has its own ETD, driver, riders and lock.
 - A trip is editable until its ETD (Europe/Amsterdam local); then it freezes for
   everyone. Lock state is computed, never stored.
 - Riders start `pending` and opt in with a pickup spot (or opt out). The trip's
