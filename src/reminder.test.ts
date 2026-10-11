@@ -244,6 +244,23 @@ describe('sendReminders', () => {
     }
   });
 
+  it('tags each of two trips on one date with its own id', async () => {
+    const { db, claimed } = fakeDb({
+      trips: [
+        { id: 9, trip_date: '2026-09-11', driver_id: 1 },
+        { id: 10, trip_date: '2026-09-11', driver_id: 1 },
+      ],
+      participants: [{ id: 2, token: 't2', response: 'in' }],
+      subs: [],
+    });
+
+    await sendReminders(await vapidEnv(db), now);
+
+    expect(claimed).toEqual(new Set([9, 10]));
+    const sent = vi.mocked(pushToUsers).mock.calls.map(([, , p]) => (p as PushPayload).tag);
+    expect(sent).toEqual(['reminder-9', 'reminder-10']);
+  });
+
   it('keeps the usual copy when the trip has a driver', async () => {
     const { db } = fakeDb({
       trips: [{ id: 9, trip_date: '2026-09-11', driver_id: 1 }],

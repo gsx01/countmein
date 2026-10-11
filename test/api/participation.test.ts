@@ -91,6 +91,16 @@ describe('POST /api/trips/:id/participation', () => {
     expect(await row(T)).toMatchObject({ response: 'out', pickup_spot: null });
   });
 
+  it('leaves the other trip on the same date alone', async () => {
+    const later = await trip({ etd: '17:00' });
+    await post('rider', T, 'participation', { response: 'in', pickup_spot: '@Rider' });
+    const res = await post('rider', later, 'participation', { response: 'out' });
+    expect(res.status).toBe(200);
+    expect(await row(T)).toMatchObject({ response: 'in', pickup_spot: '@Rider' });
+    expect(await row(later)).toMatchObject({ response: 'out', pickup_spot: null });
+    expect(tripIn(res.json, T).trip_date).toBe(tripIn(res.json, later).trip_date);
+  });
+
   describe('push', () => {
     let e: Env;
     beforeEach(async () => {

@@ -62,6 +62,20 @@ describe('sendReminders', () => {
     expect(pushedTo(spy)).toEqual([ENDPOINTS.driver, ENDPOINTS.pending, ENDPOINTS.rider]);
   });
 
+  it('reminds each of two trips tomorrow on its own', async () => {
+    const early = await trip({ daysAhead: 1, etd: '08:00' });
+    const late = await trip({ daysAhead: 1, etd: '16:00' });
+    const spy = spyPush();
+
+    await sendReminders(await withPush(), new Date());
+
+    expect(await sentAt(early)).not.toBeNull();
+    expect(await sentAt(late)).not.toBeNull();
+    expect(pushedTo(spy)).toEqual(
+      [ENDPOINTS.driver, ENDPOINTS.pending, ENDPOINTS.rider].flatMap((e) => [e, e]),
+    );
+  });
+
   it('leaves trips other than tomorrow alone', async () => {
     const T = await trip({ daysAhead: 2, driverId: null });
     const spy = spyPush();
