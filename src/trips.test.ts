@@ -9,9 +9,11 @@ interface Statement {
 }
 
 // A fake D1 that records every statement. `present` lists the trip dates the
-// existence lookup reports; every other read comes back empty.
-function fakeDb(present: string[] = []) {
+// existence lookup reports; a trip insert returns the next id, or nothing when
+// `conflict` is set; every other read comes back empty.
+function fakeDb(present: string[] = [], opts: { conflict?: boolean } = {}) {
   const statements: Statement[] = [];
+  let nextId = 100;
   const db = {
     prepare(sql: string) {
       const stmt: Statement = { sql, args: [] };
@@ -22,6 +24,7 @@ function fakeDb(present: string[] = []) {
           return this;
         },
         async first() {
+          if (sql.includes('INSERT INTO trips') && !opts.conflict) return { id: nextId++ };
           return null;
         },
         async all() {
@@ -41,6 +44,9 @@ function fakeDb(present: string[] = []) {
 
 const tripInserts = (statements: Statement[]) =>
   statements.filter((s) => s.sql.includes('INSERT INTO trips'));
+
+const backfills = (statements: Statement[]) =>
+  statements.filter((s) => s.sql.includes('INSERT OR IGNORE INTO participation'));
 
 // The column list and VALUES tuple of a trip insert, paired up by position.
 function insertedColumns(stmt: Statement): Record<string, unknown> {
@@ -74,9 +80,46 @@ describe('ensureTrips', () => {
     await ensureTrips(db, now);
     expect(statements.some((s) => s.sql.includes('is_admin'))).toBe(false);
   });
+
+  it('counts only auto trips as present and as the ETD default', async () => {
+    const { db, statements } = fakeDb();
+    await ensureTrips(db, now);
+
+    const lookup = statements.find((s) => s.sql.includes('SELECT trip_date FROM trips'));
+    expect(lookup?.sql).toContain("source = 'auto'");
+    const etdReads = statements.filter((s) => s.sql.includes('SELECT etd FROM trips'));
+    expect(etdReads.length).toBeGreaterThan(0);
+    for (const s of etdReads) expect(s.sql).toContain("source = 'auto'");
+  });
+
+  it('back-fills each new trip by its returned id', async () => {
+    const { db, statements } = fakeDb();
+    await ensureTrips(db, now);
+
+    const ids = backfills(statements).map((s) => s.args[0]);
+    expect(ids).toEqual(tripInserts(statements).map((_, i) => 100 + i));
+  });
+
+  it('skips the back-fill when the insert was a no-op', async () => {
+    const { db, statements } = fakeDb([], { conflict: true });
+    await ensureTrips(db, now);
+
+    expect(tripInserts(statements).length).toBeGreaterThan(0);
+    expect(backfills(statements)).toEqual([]);
+  });
 });
 
 describe('addManualTrip', () => {
+  it('returns the new trip id', async () => {
+    const { db } = fakeDb();
+    expect(await addManualTrip(db, '2026-09-15', '09:30', now)).toBe(100);
+  });
+
+  it('returns null when the insert was a no-op', async () => {
+    const { db } = fakeDb([], { conflict: true });
+    expect(await addManualTrip(db, '2026-09-15', '09:30', now)).toBeNull();
+  });
+
   it('inserts a manual trip with no driver', async () => {
     const { db, statements } = fakeDb();
     await addManualTrip(db, '2026-09-15', '09:30', now);
