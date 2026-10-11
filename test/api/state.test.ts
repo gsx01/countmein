@@ -79,6 +79,25 @@ describe('GET /api/state', () => {
     expect(stored?.n).toBe(0);
   });
 
+  it('carries the ETD forward from auto trips only', async () => {
+    let ahead = WINDOW_DAYS + 1;
+    while (![1, 4].includes(weekdayOf(localDatePlus(new Date(), ahead)))) ahead++;
+    const weekday = weekdayOf(localDatePlus(new Date(), ahead));
+    const pastAuto = localDatePlus(new Date(), ahead - 14);
+    await query(
+      "INSERT INTO trips (trip_date, weekday, etd, source, created_at) VALUES (?, ?, '06:45', 'auto', ?)",
+      pastAuto,
+      weekday,
+      new Date().toISOString(),
+    );
+    await trip({ daysAhead: ahead, etd: '15:00' });
+
+    const res = await state();
+    const auto = res.json.trips.filter((t) => t.source === 'auto' && t.weekday === weekday);
+    expect(auto.length).toBeGreaterThan(0);
+    for (const t of auto) expect(t.etd).toBe('06:45');
+  });
+
   it('flags locked trips', async () => {
     const L = await lockedTrip();
     const U = await trip();
