@@ -44,11 +44,11 @@ migrations are user-run too (`! npm run migrate`).
 - `src/config.ts` - resolves the office destination from `OFFICE_DESTINATION`.
 - `src/constants.ts`, `src/types.ts` - shared by Worker and web.
 - `web/` - Preact SPA (`app.tsx`, `api-client.ts`, `push-client.ts`, `maps.ts`,
-  `route.ts`, `resume.ts`, `state-cache.ts`, `leave-queue.ts`, `trip-anchor.ts`,
-  `config.ts`, `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`, `manifest.webmanifest`,
+  `route.ts`, `resume.ts`, `state-cache.ts`, `leave-queue.ts`, `leave-window.ts`,
+  `trip-anchor.ts`, `config.ts`, `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`, `manifest.webmanifest`,
   `favicon.png`). `maps.ts` lazily loads the Google Maps SDK; `route.ts` computes
   the ETA and pin order.
-- `migrations/` (`0001_init.sql` .. `0015_meetup.sql`), `scripts/seed.mjs`,
+- `migrations/` (`0001_init.sql` .. `0016_multi_trip_day.sql`), `scripts/seed.mjs`,
   `scripts/gen-vapid.mjs`.
 - Unit tests sit next to the code (`src/*.test.ts`, `web/*.test.ts`: node, fake
   DB). `test/api/` holds the API integration tests: `handleApi` called directly
@@ -67,14 +67,22 @@ migrations are user-run too (`! npm run migrate`).
   now), clamped by `clampLeftAt`: more than 60s ahead -> now; not an ISO instant
   or not on the trip's Amsterdam date -> 400. A push sent more than 2 min after
   the tap reads "Driver left at HH:MM" instead of "Driver is leaving now".
-- Trips are created two ways, both idempotent (`ON CONFLICT(trip_date)` /
-  `INSERT OR IGNORE`): `ensureTrips` tops up auto Mon/Thu trips within
-  `WINDOW_DAYS` (7); `POST /api/trips` (any enabled user) adds a one-off manual
-  trip (any future date/weekday, ETD required, duplicate date 409). Cancelling
-  keeps the slot; no hard delete.
+  The button shows on the trip's date from 2h before its ETD
+  (`web/leave-window.ts`), so a driver of two trips that day can't tap the later
+  one by mistake; the server does not enforce the window.
+- A date holds any number of trips, each fully independent (own ETD, driver,
+  riders, lock); a rider may be `in` on several. At most ONE auto trip per date
+  (partial unique index `idx_trips_auto_date`); manual trips are unlimited, even
+  at the same date and ETD. Trips are created two ways: `ensureTrips` tops up
+  auto Mon/Thu trips within `WINDOW_DAYS` (7), idempotent via `ON
+  CONFLICT(trip_date) WHERE source = 'auto' DO NOTHING` plus `INSERT OR IGNORE`
+  participation; `POST /api/trips` (any enabled user) adds a one-off manual trip
+  (any future date/weekday, ETD required). A manual trip on a Mon/Thu sits next
+  to that date's auto trip and never replaces it, and only auto trips carry the
+  ETD forward to the next auto trip. Cancelling keeps the slot; no hard delete.
 - `GET /api/state` returns auto trips within `[today, today + WINDOW_DAYS]` plus
-  ALL future manual trips, ordered by date. Today's trip shows even when locked
-  (read-only client-side).
+  ALL future manual trips, ordered by date, then ETD, then id. Today's trips show
+  even when locked (read-only client-side).
 - Riders default `pending`; they set `in` (requires a pickup spot from the live
   list - the enabled users' `pickup_label`s plus the office) or `out`, never back
   to `pending`. The office label (`OFFICE_DESTINATION.label`) is reserved.
@@ -89,7 +97,7 @@ migrations are user-run too (`! npm run migrate`).
   meetup_label, note }`; an empty body or an unknown key is 400, and every field
   is validated before anything is written. Only changed fields are stored, and
   they go out as ONE push (a lone change reads as its own push; several are
-  listed as "<day> - trip updated"). The driver card drafts all three behind one
+  listed as "<trip> - trip updated"). The driver card drafts all three behind one
   "Save changes". `POST /api/trips/:id/etd` stays for the roster's "Apply" on a
   rider's suggested time. Cancelling sits apart, behind a two-step confirm.
 - Meetup suggestion: the driver may suggest one spot per trip
@@ -125,9 +133,13 @@ migrations are user-run too (`! npm run migrate`).
   - Evening reminder (`reminder.ts`, gated in `cron.ts` to Amsterdam-local 20:00):
     for tomorrow's live trips, nudges pending riders and confirms to `in` riders +
     the driver. A trip with no driver gets the no-driver alert ("No driver for
-    tomorrow" / "<day> - can you drive?") instead, to every non-out rider (in and
+    tomorrow" / "<trip> - can you drive?") instead, to every non-out rider (in and
     pending). Claimed once per trip (`reminder_sent_at`) before sending, so a
-    driver assigned (or lost) after 20:00 triggers no second reminder.
+    driver assigned (or lost) after 20:00 triggers no second reminder. Two trips
+    tomorrow mean two separate reminders.
+  Push copy names a trip by day AND time via `tripLabel` (`src/time.ts`): "Mon 12
+  Oct 08:00". On-change pushes use the trip as stored before the write, so an ETD
+  change names the old time ("Mon 12 Oct 08:00 - ETD now 09:00").
   Each user has a `pref_<category>` flag (six categories in `types.ts`); a push to
   a user who turned that category off is dropped. `PATCH /api/prefs` edits your own
   flags. Sends run via `ctx.waitUntil`; payloads carry the recipient's own
