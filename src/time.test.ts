@@ -9,6 +9,7 @@ import {
   weekdayOf,
   localHHMM,
   clampLeftAt,
+  tripLabel,
 } from './time';
 
 // 2026 Amsterdam DST: CET (UTC+1) until 2026-03-29 01:00 UTC, CEST (UTC+2)
@@ -114,6 +115,13 @@ describe('localHHMM', () => {
   it('formats the Amsterdam wall-clock time', () => {
     expect(localHHMM(new Date('2026-01-05T06:42:59.000Z'))).toBe('07:42');
     expect(localHHMM(new Date('2026-07-06T22:05:00.000Z'))).toBe('00:05');
+  });
+});
+
+describe('tripLabel', () => {
+  it('names the day and the time, without a comma', () => {
+    expect(tripLabel('2026-01-05', '08:00')).toBe('Mon 5 Jan 08:00');
+    expect(tripLabel('2026-10-12', '16:30')).toBe('Mon 12 Oct 16:30');
   });
 });
 

@@ -110,6 +110,19 @@ export function localHHMM(instant: Date): string {
   return `${pad(p.hour)}:${pad(p.minute)}`;
 }
 
+const dayFmt = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
+
+// A trip as push copy names it: "Mon 8 Sep 08:00". The time tells apart two trips
+// on one date. The en-GB formatter yields "Mon, 8 Sep"; the comma is dropped.
+export function tripLabel(isoDate: string, etd: string): string {
+  return `${dayFmt.format(new Date(`${isoDate}T00:00:00Z`)).replace(',', '')} ${etd}`;
+}
+
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
 const CLOCK_SKEW_MS = 60_000;
 
