@@ -47,17 +47,13 @@ export async function trip(
   db: D1Database = env.DB,
 ): Promise<number> {
   const date = localDatePlus(new Date(), opts.daysAhead ?? 2);
-  await addManualTrip(db, date, opts.etd ?? '08:00', new Date());
-  const row = await db
-    .prepare('SELECT id FROM trips WHERE trip_date = ?')
-    .bind(date)
-    .first<{ id: number }>();
-  if (!row) throw new Error(`trip on ${date} not created`);
+  const id = await addManualTrip(db, date, opts.etd ?? '08:00', new Date());
+  if (id === null) throw new Error(`trip on ${date} not created`);
   await db
     .prepare('UPDATE trips SET driver_id = ? WHERE id = ?')
-    .bind(opts.driverId === undefined ? DRIVER : opts.driverId, row.id)
+    .bind(opts.driverId === undefined ? DRIVER : opts.driverId, id)
     .run();
-  return row.id;
+  return id;
 }
 
 export async function lockedTrip(driverId: number | null = DRIVER): Promise<number> {

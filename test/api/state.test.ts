@@ -50,7 +50,7 @@ describe('GET /api/state', () => {
     const pastAuto = await autoTrip(-1);
     const lateAuto = await autoTrip(WINDOW_DAYS + 1);
     const farManual = await trip({ daysAhead: 30 });
-    const pastManual = await trip({ daysAhead: -1 });
+    const pastManual = await trip({ daysAhead: -2 });
 
     const res = await state();
     expect(res.status).toBe(200);
