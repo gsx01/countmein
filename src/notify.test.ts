@@ -113,7 +113,7 @@ const allOn = {
   rider_responses: true,
   rider_notes: true,
 };
-const trip = { id: 1, trip_date: '2026-09-07', driver_id: 1 };
+const trip = { id: 1, trip_date: '2026-09-07', etd: '08:00', driver_id: 1 };
 const bob: User = { id: 2, name: 'Bob', is_admin: 0, prefs: allOn };
 const alice: User = { id: 1, name: 'Alice', is_admin: 1, prefs: allOn };
 const allPending = [
@@ -209,7 +209,7 @@ describe('notifyChange routing', () => {
 
   it('notifies the previous driver and non-out riders on a driver change', async () => {
     // Carol (3) reassigns the trip from Alice (1) to Bob (2).
-    const changed = { id: 1, trip_date: '2026-09-07', driver_id: 2 };
+    const changed = { ...trip, driver_id: 2 };
     const db = fakeDb({
       users: [
         { id: 1, token: 't1' },
@@ -266,7 +266,7 @@ describe('notifyChange routing', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(null, { status: 201 }));
-    const noDriver = { id: 1, trip_date: '2026-09-07', driver_id: null };
+    const noDriver = { ...trip, driver_id: null };
 
     await notifyChange(env, alice, noDriver, { kind: 'cancel', cancelled: true });
 
@@ -328,9 +328,9 @@ describe('meetup suggestion', () => {
   });
 
   it('names the driver and the spot, with the day as body', () => {
-    expect(copyFor(alice, 'Mon 5 Jan', { kind: 'meetup', label: '@Bob' })).toEqual({
+    expect(copyFor(alice, 'Mon 5 Jan 08:00', { kind: 'meetup', label: '@Bob' })).toEqual({
       title: 'Alice suggests meeting at @Bob',
-      body: 'Mon 5 Jan',
+      body: 'Mon 5 Jan 08:00',
     });
   });
 });
@@ -338,14 +338,14 @@ describe('meetup suggestion', () => {
 describe('trip update copy', () => {
   it('reads a lone change exactly as its own push', () => {
     const etd = { kind: 'etd', etd: '07:45' } as const;
-    expect(copyFor(alice, 'Mon 5 Jan', { kind: 'trip-update', changes: [etd] })).toEqual(
-      copyFor(alice, 'Mon 5 Jan', etd),
+    expect(copyFor(alice, 'Mon 5 Jan 08:00', { kind: 'trip-update', changes: [etd] })).toEqual(
+      copyFor(alice, 'Mon 5 Jan 08:00', etd),
     );
   });
 
   it('lists several changes in one body', () => {
     expect(
-      copyFor(alice, 'Mon 5 Jan', {
+      copyFor(alice, 'Mon 5 Jan 08:00', {
         kind: 'trip-update',
         changes: [
           { kind: 'etd', etd: '07:45' },
@@ -354,14 +354,14 @@ describe('trip update copy', () => {
         ],
       }),
     ).toEqual({
-      title: 'Mon 5 Jan - trip updated',
+      title: 'Mon 5 Jan 08:00 - trip updated',
       body: 'Leaves 07:45 - meet at @Bob - note: bring snacks',
     });
   });
 
   it('says a cleared note was cleared', () => {
     expect(
-      copyFor(alice, 'Mon 5 Jan', {
+      copyFor(alice, 'Mon 5 Jan 08:00', {
         kind: 'trip-update',
         changes: [
           { kind: 'trip-note', note: null },
@@ -377,18 +377,30 @@ describe('leaving copy', () => {
 
   it('says "leaving now" for a fresh tap', () => {
     const leftAt = new Date(now.getTime() - 90_000).toISOString();
-    expect(copyFor(alice, 'Mon 5 Jan', { kind: 'leaving', leftAt }, now)).toEqual({
+    expect(copyFor(alice, 'Mon 5 Jan 08:00', { kind: 'leaving', leftAt }, now)).toEqual({
       title: 'Driver is leaving now',
-      body: 'Mon 5 Jan',
+      body: 'Mon 5 Jan 08:00',
     });
   });
 
   it('names the Amsterdam tap time for a late send', () => {
     const leftAt = '2026-01-05T06:42:00.000Z';
-    expect(copyFor(alice, 'Mon 5 Jan', { kind: 'leaving', leftAt }, now)).toEqual({
+    expect(copyFor(alice, 'Mon 5 Jan 08:00', { kind: 'leaving', leftAt }, now)).toEqual({
       title: 'Driver left at 07:42',
-      body: 'Mon 5 Jan',
+      body: 'Mon 5 Jan 08:00',
     });
+  });
+});
+
+describe('push copy', () => {
+  it('names the trip by day and its old time on an ETD change', async () => {
+    vi.mocked(pushToUsers).mockClear();
+    const db = fakeDb({ users: [{ id: 2, token: 't2' }], participation: allPending, subs: [] });
+
+    await notifyChange(await vapidEnv(db), alice, trip, { kind: 'etd', etd: '07:30' });
+
+    const [[, , payload]] = vi.mocked(pushToUsers).mock.calls;
+    expect((payload as PushPayload).title).toMatch(/^Mon 7 Sept? 08:00 - ETD now 07:30$/);
   });
 });
 

@@ -64,7 +64,7 @@ interface Sub {
 // substring. `claimed` records which trip ids have had reminder_sent_at set, so
 // the claim UPDATE reports 0 changes on a re-run (idempotency).
 function fakeDb(opts: {
-  trips: { id: number; trip_date: string; driver_id: number | null }[];
+  trips: { id: number; trip_date: string; etd: string; driver_id: number | null }[];
   participants: { id: number; token: string; response: string; optedOut?: boolean }[];
   subs: Sub[];
 }) {
@@ -147,7 +147,7 @@ describe('sendReminders', () => {
   it('nudges pending, confirms in + driver, and skips out riders', async () => {
     // Driver 1; rider 2 in, rider 3 pending, rider 4 out (not in the query result).
     const { db } = fakeDb({
-      trips: [{ id: 9, trip_date: '2026-09-11', driver_id: 1 }],
+      trips: [{ id: 9, trip_date: '2026-09-11', etd: '08:00', driver_id: 1 }],
       participants: [
         { id: 1, token: 't1', response: 'pending' },
         { id: 2, token: 't2', response: 'in' },
@@ -175,7 +175,7 @@ describe('sendReminders', () => {
 
   it('sends nothing on a second run (trip already claimed)', async () => {
     const { db } = fakeDb({
-      trips: [{ id: 9, trip_date: '2026-09-11', driver_id: 1 }],
+      trips: [{ id: 9, trip_date: '2026-09-11', etd: '08:00', driver_id: 1 }],
       participants: [{ id: 2, token: 't2', response: 'in' }],
       subs: [{ id: 11, user_id: 2, endpoint: 'https://push.test/in' }],
     });
@@ -193,7 +193,7 @@ describe('sendReminders', () => {
 
   it('skips a rider who opted out of the evening reminder', async () => {
     const { db } = fakeDb({
-      trips: [{ id: 9, trip_date: '2026-09-11', driver_id: 1 }],
+      trips: [{ id: 9, trip_date: '2026-09-11', etd: '08:00', driver_id: 1 }],
       participants: [
         { id: 2, token: 't2', response: 'in' },
         { id: 3, token: 't3', response: 'pending', optedOut: true },
@@ -215,7 +215,7 @@ describe('sendReminders', () => {
 
   it('sends only the no-driver alert to in and pending riders of a driverless trip', async () => {
     const { db } = fakeDb({
-      trips: [{ id: 9, trip_date: '2026-09-11', driver_id: null }],
+      trips: [{ id: 9, trip_date: '2026-09-11', etd: '08:00', driver_id: null }],
       participants: [
         { id: 2, token: 't2', response: 'in' },
         { id: 3, token: 't3', response: 'pending' },
@@ -237,7 +237,7 @@ describe('sendReminders', () => {
     for (const id of [2, 3]) {
       expect(sent[id]).toMatchObject({
         title: 'No driver for tomorrow',
-        body: expect.stringMatching(/^Fri 11 Sept? - can you drive\?$/),
+        body: expect.stringMatching(/^Fri 11 Sept? 08:00 - can you drive\?$/),
         url: `/?t=t${id}#trip-9`,
         tag: 'reminder-9',
       });
@@ -247,8 +247,8 @@ describe('sendReminders', () => {
   it('tags each of two trips on one date with its own id', async () => {
     const { db, claimed } = fakeDb({
       trips: [
-        { id: 9, trip_date: '2026-09-11', driver_id: 1 },
-        { id: 10, trip_date: '2026-09-11', driver_id: 1 },
+        { id: 9, trip_date: '2026-09-11', etd: '08:00', driver_id: 1 },
+        { id: 10, trip_date: '2026-09-11', etd: '16:30', driver_id: 1 },
       ],
       participants: [{ id: 2, token: 't2', response: 'in' }],
       subs: [],
@@ -257,13 +257,18 @@ describe('sendReminders', () => {
     await sendReminders(await vapidEnv(db), now);
 
     expect(claimed).toEqual(new Set([9, 10]));
-    const sent = vi.mocked(pushToUsers).mock.calls.map(([, , p]) => (p as PushPayload).tag);
-    expect(sent).toEqual(['reminder-9', 'reminder-10']);
+    const sent = vi
+      .mocked(pushToUsers)
+      .mock.calls.map(([, , p]) => [(p as PushPayload).tag, (p as PushPayload).body]);
+    expect(sent).toEqual([
+      ['reminder-9', expect.stringMatching(/^You're in - Fri 11 Sept? 08:00$/)],
+      ['reminder-10', expect.stringMatching(/^You're in - Fri 11 Sept? 16:30$/)],
+    ]);
   });
 
   it('keeps the usual copy when the trip has a driver', async () => {
     const { db } = fakeDb({
-      trips: [{ id: 9, trip_date: '2026-09-11', driver_id: 1 }],
+      trips: [{ id: 9, trip_date: '2026-09-11', etd: '08:00', driver_id: 1 }],
       participants: [
         { id: 1, token: 't1', response: 'pending' },
         { id: 2, token: 't2', response: 'in' },
@@ -278,15 +283,15 @@ describe('sendReminders', () => {
     const sent = payloadsByUser();
     expect(sent[1]).toMatchObject({
       title: 'Trip tomorrow',
-      body: expect.stringMatching(/^You're driving - Fri 11 Sept?$/),
+      body: expect.stringMatching(/^You're driving - Fri 11 Sept? 08:00$/),
     });
     expect(sent[2]).toMatchObject({
       title: 'Trip tomorrow',
-      body: expect.stringMatching(/^You're in - Fri 11 Sept?$/),
+      body: expect.stringMatching(/^You're in - Fri 11 Sept? 08:00$/),
     });
     expect(sent[3]).toMatchObject({
       title: 'Trip tomorrow - are you in?',
-      body: expect.stringMatching(/^Fri 11 Sept?$/),
+      body: expect.stringMatching(/^Fri 11 Sept? 08:00$/),
     });
   });
 });

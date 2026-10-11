@@ -8,7 +8,7 @@ import type { Env } from './index';
 import type { User } from './db';
 import type { NotifyCategory } from './types';
 import { pushToUsers, type PushPayload } from './push';
-import { localHHMM } from './time';
+import { localHHMM, tripLabel } from './time';
 
 // The driver's trip settings that one PATCH can change together.
 export type TripUpdate =
@@ -56,9 +56,12 @@ const CATEGORY_BY_KIND: Record<NotifyAction['kind'], NotifyCategory> = {
 // input), so interpolating it into SQL is safe.
 const prefColumn = (category: NotifyCategory) => `pref_${category}`;
 
+// The trip as stored BEFORE the write, so an ETD change names the old time,
+// the one riders know.
 interface NotifyTrip {
   id: number;
   trip_date: string;
+  etd: string;
   driver_id: number | null;
 }
 
@@ -66,17 +69,6 @@ interface Recipient {
   id: number;
   token: string;
 }
-
-const dateFmt = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'UTC',
-});
-
-// "Mon 8 Sep" (the en-GB formatter yields "Mon, 8 Sep"; drop the comma).
-const dateLabel = (isoDate: string) =>
-  dateFmt.format(new Date(`${isoDate}T00:00:00Z`)).replace(',', '');
 
 const NOTE_PREVIEW = 120;
 const preview = (note: string) =>
@@ -203,7 +195,7 @@ export async function notifyChange(
     });
     if (unique.length === 0) return;
 
-    const { title, body } = copyFor(actor, dateLabel(trip.trip_date), action);
+    const { title, body } = copyFor(actor, tripLabel(trip.trip_date, trip.etd), action);
     const tag = `trip-${trip.id}`;
     await Promise.all(
       unique.map((r) => {

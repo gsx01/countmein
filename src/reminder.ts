@@ -10,23 +10,13 @@
 // on-change path: send failures are logged and swallowed, never retried.
 
 import type { Env } from './index';
-import { localDatePlus } from './time';
+import { localDatePlus, tripLabel } from './time';
 import { pushToUsers, type PushPayload } from './push';
-
-const dateFmt = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'UTC',
-});
-
-// "Mon 8 Sep" (drop the en-GB comma), matching notify.ts.
-const dateLabel = (isoDate: string) =>
-  dateFmt.format(new Date(`${isoDate}T00:00:00Z`)).replace(',', '');
 
 interface EligibleTrip {
   id: number;
   trip_date: string;
+  etd: string;
   driver_id: number | null;
 }
 
@@ -102,7 +92,7 @@ async function remindTrip(env: Env, trip: EligibleTrip): Promise<void> {
   const recipients = planRecipients(trip.driver_id, rows.results);
   if (recipients.length === 0) return;
 
-  const day = dateLabel(trip.trip_date);
+  const day = tripLabel(trip.trip_date, trip.etd);
   await Promise.all(
     recipients.map((r) => {
       const { title, body } = copyFor(r.kind, day);
@@ -122,7 +112,7 @@ export async function sendReminders(env: Env, now: Date): Promise<void> {
     const tomorrow = localDatePlus(now, 1);
     const nowIso = now.toISOString();
     const trips = await env.DB.prepare(
-      `SELECT id, trip_date, driver_id
+      `SELECT id, trip_date, etd, driver_id
          FROM trips
         WHERE trip_date = ? AND status != 'cancelled' AND reminder_sent_at IS NULL`,
     )

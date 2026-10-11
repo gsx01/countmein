@@ -686,7 +686,7 @@ async function setDriver(
       notifyChange(
         env,
         user,
-        { id: trip.id, trip_date: trip.trip_date, driver_id: driverId as number | null },
+        { id: trip.id, trip_date: trip.trip_date, etd: trip.etd, driver_id: driverId as number | null },
         { kind: 'driver', previous: trip.driver_id, driverName },
       ),
     );
