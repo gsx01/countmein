@@ -144,7 +144,7 @@ export async function buildState(
          FROM trips
         WHERE (source = 'auto' AND trip_date >= ? AND trip_date <= ?)
            OR (source = 'manual' AND trip_date >= ?)
-        ORDER BY trip_date ASC`,
+        ORDER BY trip_date ASC, etd ASC, id ASC`,
     )
     .bind(today, windowEnd, today)
     .all<TripRow>();
