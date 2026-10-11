@@ -34,6 +34,7 @@ import {
 } from './api-client';
 import { TIMEZONE } from '../src/constants';
 import { GOOGLE_MAPS_MAP_ID } from './config';
+import { leaveOpen } from './leave-window';
 import { mapsLibrary, markerLibrary, navigateUrl, placesLibrary, type PickedPlace } from './maps';
 import {
   addSeconds,
@@ -1013,7 +1014,7 @@ function TripCard({
         !cancelled &&
         !trip.left_at &&
         !pendingLeave &&
-        trip.trip_date === localToday() && (
+        leaveOpen(trip, new Date()) && (
           <button class="leaving" onClick={onLeave}>
             I'm leaving
           </button>

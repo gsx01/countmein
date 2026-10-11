@@ -1,4 +1,4 @@
-import { localDatePlus } from '../src/time';
+import { localDatePlus, localInstant } from '../src/time';
 import {
   apiState,
   apiTrip,
@@ -211,6 +211,33 @@ test('a failed write shows its error where it was made', async ({ page }) => {
   await card(page, T).getByRole('button', { name: "I'll drive", exact: true }).click();
   await expect(card(page, T).locator('.form-error')).toHaveText('Trip locked.');
   await expect(page.locator('.banner')).toHaveCount(0);
+  await pause(page);
+});
+
+test("I'm leaving shows from two hours before each trip's ETD", async ({ page }) => {
+  const MORNING = 201;
+  const AFTERNOON = 202;
+  reset({
+    trips: [
+      { id: MORNING, daysAhead: 0, etd: '10:00', driver: 'driver' },
+      { id: AFTERNOON, daysAhead: 0, etd: '12:30', driver: 'driver' },
+    ],
+  });
+  const today = localDatePlus(new Date(), 0);
+  const leaving = (id: number) =>
+    card(page, id).getByRole('button', { name: "I'm leaving", exact: true });
+
+  await page.clock.setFixedTime(localInstant(today, '09:00'));
+  await as(page, 'driver', MORNING, '09:00: only the 10:00 trip can leave');
+  await expect(leaving(MORNING)).toHaveCount(1);
+  await expect(leaving(AFTERNOON)).toHaveCount(0);
+  await pause(page);
+
+  await say(page, `${USERS.driver.role}: 10:45: the 12:30 trip can leave too`);
+  await page.clock.setFixedTime(localInstant(today, '10:45'));
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(leaving(AFTERNOON)).toHaveCount(1);
+  await expect(leaving(MORNING)).toHaveCount(1);
   await pause(page);
 });
 
