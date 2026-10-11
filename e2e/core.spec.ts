@@ -1,5 +1,6 @@
 import { localDatePlus } from '../src/time';
 import {
+  apiState,
   apiTrip,
   as,
   card,
@@ -156,15 +157,51 @@ test('the leave queue sends an offline tap once back online', async ({ page, con
   await pause(page);
 });
 
-test('a failed write shows its error where it was made', async ({ page }) => {
-  await as(page, 'rider', T, 'add a one-off trip on a date that has one');
+test('a second one-off trip on a date gets its own card', async ({ page }) => {
+  const date = localDatePlus(new Date(), 2);
+  await as(page, 'rider', T, 'add a 06:30 trip on the same date');
   await page.getByRole('button', { name: 'Add a one-off trip', exact: true }).click();
-  await page.locator('.add-trip-form input[type="date"]').fill(localDatePlus(new Date(), 2));
+  await page.locator('.add-trip-form input[type="date"]').fill(date);
+  await page.locator('.add-trip-form input[type="time"]').fill('06:30');
+  await write(page, '/api/trips', () =>
+    page.getByRole('button', { name: 'Add trip', exact: true }).click(),
+  );
+  const added = (await apiState('rider')).trips.find(
+    (t) => t.trip_date === date && t.source === 'manual' && t.id !== T,
+  );
+  if (!added) throw new Error('added trip not in state');
+  await expect(card(page, added.id).locator('.etd')).toHaveText('Leaves 06:30');
+  const order = await page
+    .locator('section.card')
+    .evaluateAll((els) => els.map((e) => Number((e as HTMLElement).dataset.tripId)));
+  expect(order.indexOf(added.id)).toBeLessThan(order.indexOf(T));
+
+  await say(page, `${USERS.rider.role}: in on the new trip, out on the other`);
+  await card(page, added.id).locator('.controls select').selectOption(USERS.pending.label);
+  await write(page, `/api/trips/${added.id}/participation`, () =>
+    card(page, added.id).getByRole('button', { name: "I'm in", exact: true }).click(),
+  );
+  await write(page, `/api/trips/${T}/participation`, () =>
+    card(page, T).getByRole('button', { name: "I'm out", exact: true }).click(),
+  );
+  await pause(page);
+  expect(rider(await apiTrip('driver', added.id), 'rider')).toMatchObject({
+    response: 'in',
+    pickup_spot: '@Pending',
+  });
+  expect(rider(await apiTrip('driver', T), 'rider').response).toBe('out');
+});
+
+test('a failed write shows its error where it was made', async ({ page }) => {
+  await as(page, 'rider', T, 'add a one-off trip the server rejects');
+  await page.route('**/api/trips', (route) =>
+    route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":"conflict"}' }),
+  );
+  await page.getByRole('button', { name: 'Add a one-off trip', exact: true }).click();
+  await page.locator('.add-trip-form input[type="date"]').fill(localDatePlus(new Date(), 3));
   await page.locator('.add-trip-form input[type="time"]').fill('09:00');
   await page.getByRole('button', { name: 'Add trip', exact: true }).click();
-  await expect(page.locator('.add-trip-form .form-error')).toHaveText(
-    'A trip already exists for that date.',
-  );
+  await expect(page.locator('.add-trip-form .form-error')).toHaveText('Conflict.');
   await expect(page.locator('.banner')).toHaveCount(0);
 
   await say(page, `${USERS.rider.role}: a card write the server rejects`);
