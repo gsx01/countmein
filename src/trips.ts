@@ -82,7 +82,7 @@ export async function ensureTrips(db: D1Database, now: Date): Promise<void> {
 
 // A one-off trip added by a user (decision 2.x): any future date, any weekday.
 // The ETD is required (validated by the caller); like auto trips it starts with
-// no driver. The caller rejects a duplicate date (409). Returns the new trip's id.
+// no driver. Returns the new trip's id.
 export async function addManualTrip(
   db: D1Database,
   date: string,

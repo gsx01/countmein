@@ -91,7 +91,7 @@ function formatDataAt(iso: string): string {
 const isNetworkError = (err: unknown) => err instanceof ApiError && err.status === 0;
 
 // A failed write as a sentence for the user; the API words its errors in
-// lowercase fragments ("a trip already exists for that date").
+// lowercase fragments ("trip locked").
 function writeErrorText(err: unknown): string {
   if (isNetworkError(err)) return 'No connection - not saved.';
   const msg = err instanceof Error && err.message ? err.message : 'Something went wrong';
@@ -415,8 +415,8 @@ function AddTrip({ apply }: { apply: Apply }) {
     setError(null);
     const ok = await apply(() => createTrip(date, etd), setError);
     setBusy(false);
-    // Keep the form (and the entered date/ETD) on failure - e.g. a duplicate or
-    // past date - so the error is fixable rather than lost.
+    // Keep the form (and the entered date/ETD) on failure - e.g. a past date -
+    // so the error is fixable rather than lost.
     if (ok) {
       setOpen(false);
       setDate('');

@@ -216,8 +216,8 @@ function parseTripDate(value: unknown, today: string): string {
 }
 
 // Add a one-off manual trip (decision 2.x): any enabled user, any future date and
-// weekday, ETD required, duplicate date rejected. No push - a new trip has no
-// prior value to diff against.
+// weekday, ETD required. A date may hold any number of manual trips, next to its
+// auto trip. No push - a new trip has no prior value to diff against.
 async function createTrip(request: Request, env: Env, now: Date): Promise<void> {
   const body = await readBody(request);
   const date = parseTripDate(body.trip_date, localDateStr(now));
@@ -226,11 +226,6 @@ async function createTrip(request: Request, env: Env, now: Date): Promise<void> 
   if (typeof etd !== 'string' || !HHMM.test(etd)) {
     throw new ApiError(400, 'etd must be HH:MM');
   }
-
-  const existing = await env.DB.prepare('SELECT id FROM trips WHERE trip_date = ?')
-    .bind(date)
-    .first<{ id: number }>();
-  if (existing) throw new ApiError(409, 'a trip already exists for that date');
 
   await addManualTrip(env.DB, date, etd, now);
 }

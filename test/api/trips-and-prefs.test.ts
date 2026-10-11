@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { localDatePlus } from '../../src/time';
+import { localDatePlus, weekdayOf } from '../../src/time';
 import type { AppState } from '../../src/types';
 import { call, DRIVER, query, RIDER, seedUsers, TOKENS } from './helpers';
 
@@ -43,10 +43,33 @@ describe('POST /api/trips', () => {
     );
   });
 
-  it('rejects a duplicate date with 409', async () => {
+  it('adds a second trip on a date, listed in ETD order', async () => {
+    const date = future();
+    await create({ trip_date: date, etd: '15:00' });
+    const res = await create({ trip_date: date, etd: '08:30' });
+    expect(res.status).toBe(200);
+    const onDate = res.json.trips.filter((t) => t.trip_date === date);
+    expect(onDate.map((t) => t.etd)).toEqual(['08:30', '15:00']);
+    expect(new Set(onDate.map((t) => t.id)).size).toBe(2);
+  });
+
+  it('allows a second trip at the same date and ETD', async () => {
     const date = future();
     await create({ trip_date: date, etd: '08:00' });
-    expect((await create({ trip_date: date, etd: '09:00' })).status).toBe(409);
+    const res = await create({ trip_date: date, etd: '08:00' });
+    expect(res.status).toBe(200);
+    expect(res.json.trips.filter((t) => t.trip_date === date)).toHaveLength(2);
+  });
+
+  it('keeps the auto trip next to a manual trip on a Monday in the window', async () => {
+    let ahead = 1;
+    while (weekdayOf(localDatePlus(new Date(), ahead)) !== 1) ahead++;
+    const date = localDatePlus(new Date(), ahead);
+    await create({ trip_date: date, etd: '14:00' });
+
+    const res = await call<AppState>(TOKENS.rider, 'GET', '/api/state');
+    const onDate = res.json.trips.filter((t) => t.trip_date === date);
+    expect(onDate.map((t) => t.source).sort()).toEqual(['auto', 'manual']);
   });
 });
 
