@@ -38,6 +38,7 @@ cp wrangler.toml.example wrangler.toml   # Worker: D1 ids, domain, vars
 
 - `.env` / `.env.staging` - injected into the client build: `VAPID_PUBLIC_KEY`,
   `GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_MAP_ID`, and `COUNTMEIN_BASE_URL` (seed URLs).
+  `.env` also holds `STAGING_URL`, the staging Worker origin the smoke check hits.
 - `wrangler.toml` - your D1 `database_id`(s), custom domain (or drop the
   `[[routes]]` block), and `[vars]` (`VAPID_PUBLIC_KEY`, `OFFICE_DESTINATION`).
 - `node scripts/gen-vapid.mjs` mints a VAPID keypair; put the public key in `.env`
@@ -78,8 +79,12 @@ npm run e2e:video                 # same, plus one video per test in e2e/videos/
 ```
 
 It serves its own Worker config (`e2e/wrangler.e2e.toml`) with a separate D1 in
-`e2e/.state`, sends no pushes and loads no Google Maps. If the bundled Chromium
-won't start, use an installed Chrome with `PW_CHANNEL=chrome-dev` (or `chrome`).
+`e2e/.state` and loads no Google Maps. Pushes go to a fake push service inside
+the test run (port 8789), signed with a VAPID pair generated per run; the push
+spec then delivers them to the real service worker and checks the notification.
+Any uncaught page error or `console.error` fails the test. If the bundled
+Chromium won't start, use an installed Chrome with `PW_CHANNEL=chrome-dev` (or
+`chrome`).
 
 ## Deploy
 
@@ -88,15 +93,21 @@ npx wrangler login
 npx wrangler d1 create countmein         # paste the id into wrangler.toml
 npx wrangler secret put VAPID_PRIVATE_KEY    # from gen-vapid.mjs
 npx wrangler secret put VAPID_SUBJECT        # a mailto: address
-npm run deploy                           # build + wrangler deploy
-npx wrangler d1 migrations apply countmein --remote
+npm run migrate                          # apply the migrations to the remote D1
+npm run deploy                           # check migrations, build, wrangler deploy
 npm run seed -- --remote                 # seeds remote, prints production URLs
 ```
 
+`npm run deploy` refuses to build or deploy while the production D1 has
+unapplied migrations (or when it can't tell); run `npm run migrate` first.
+
 Distribute each printed `/?t=<token>` link to its owner. Re-running `seed`
 rotates tokens (old links die). After the initial seed an admin adds and manages
-users in-app. A `[env.staging]` Worker mirrors this for a staging deploy
-(`npm run deploy:staging`).
+users in-app. A `[env.staging]` Worker mirrors this for a staging deploy:
+`npm run deploy:staging` applies pending staging migrations, builds, deploys, and
+then runs `npm run smoke:staging` (needs `STAGING_URL` in `.env`), which checks
+the shell, the service worker, the manifest and `/api/state` with and without a
+token.
 
 ## Notes
 
