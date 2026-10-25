@@ -138,6 +138,25 @@ test('offline is read-only', async ({ page, context }) => {
   await context.setOffline(false);
 });
 
+test('opening the API as a page keeps the offline app', async ({ page, context }) => {
+  await as(page, 'rider', T, 'online, the service worker caches the app');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await expect(card(page, T)).toBeVisible();
+  await say(page, `${USERS.rider.role}: open /api/state as a page`);
+  await pause(page);
+
+  await page.goto(`/api/state?t=${USERS.rider.token}`);
+  await expect(page.locator('body')).toContainText('"trips"');
+  await page.waitForTimeout(1_000);
+
+  await context.setOffline(true);
+  await page.goto('/');
+  await expect(card(page, T)).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.banner').filter({ hasText: /^Offline - data from/ })).toBeVisible();
+  await context.setOffline(false);
+});
+
 test('the leave queue sends an offline tap once back online', async ({ page, context }) => {
   await as(page, 'driver', TODAY, "go offline and tap I'm leaving");
   await context.setOffline(true);
