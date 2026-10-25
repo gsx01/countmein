@@ -1,6 +1,18 @@
+import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AdminUser, AdminWriteResponse, UsersResponse } from '../../src/types';
-import { call, DRIVER, OFFICE, PENDING, query, RIDER, seedUsers, TOKENS, trip } from './helpers';
+import {
+  call,
+  DRIVER,
+  OFFICE,
+  PENDING,
+  query,
+  RIDER,
+  seedUsers,
+  subscribeAll,
+  TOKENS,
+  trip,
+} from './helpers';
 
 const admin = <T = AdminWriteResponse>(method: string, path: string, body?: unknown) =>
   call<T>(TOKENS.driver, method, path, body);
@@ -151,6 +163,15 @@ describe('POST /api/users/:id/rotate-token', () => {
     expect(fresh).not.toBe(TOKENS.rider);
     expect((await call(TOKENS.rider, 'GET', '/api/state')).status).toBe(401);
     expect((await call(fresh, 'GET', '/api/state')).status).toBe(200);
+  });
+
+  it("drops the user's push subscriptions, and only theirs", async () => {
+    await subscribeAll();
+    expect((await admin('POST', `/api/users/${RIDER}/rotate-token`)).status).toBe(200);
+    const owners = await env.DB.prepare(
+      'SELECT user_id FROM push_subscriptions ORDER BY user_id',
+    ).all<{ user_id: number }>();
+    expect(owners.results.map((r) => r.user_id)).toEqual([DRIVER, PENDING]);
   });
 
   it('returns 404 for a missing user', async () => {

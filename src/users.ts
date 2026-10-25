@@ -182,5 +182,10 @@ export async function updateUser(db: D1Database, id: number, patch: UserPatch): 
 }
 
 export async function rotateToken(db: D1Database, id: number): Promise<void> {
-  await db.prepare('UPDATE users SET token = ? WHERE id = ?').bind(newToken(), id).run();
+  // A device subscribed under a leaked token would otherwise keep receiving
+  // pushes, each carrying a link with the new token.
+  await db.batch([
+    db.prepare('UPDATE users SET token = ? WHERE id = ?').bind(newToken(), id),
+    db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').bind(id),
+  ]);
 }
