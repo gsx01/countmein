@@ -186,6 +186,13 @@ describe('POST /api/push/subscribe and unsubscribe', () => {
     expect((await del()).status).toBe(204);
   });
 
+  it("leaves another user's subscription alone on unsubscribe", async () => {
+    await sub(TOKENS.rider, FCM);
+    const res = await call(TOKENS.driver, 'POST', '/api/push/unsubscribe', { endpoint: FCM });
+    expect(res.status).toBe(204);
+    expect(await owner(FCM)).toMatchObject({ user_id: RIDER });
+  });
+
   it('rejects an unsubscribe without an endpoint', async () => {
     expect((await call(TOKENS.rider, 'POST', '/api/push/unsubscribe', {})).status).toBe(400);
   });

@@ -130,7 +130,7 @@ export async function handleApi(
         return noContent();
       }
       if (parts[2] === 'unsubscribe') {
-        await unsubscribePush(request, env);
+        await unsubscribePush(request, env, user);
         return noContent();
       }
     }
@@ -855,12 +855,14 @@ async function subscribePush(request: Request, env: Env, user: User): Promise<vo
     .run();
 }
 
-async function unsubscribePush(request: Request, env: Env): Promise<void> {
+async function unsubscribePush(request: Request, env: Env, user: User): Promise<void> {
   const body = await readBody(request);
   const endpoint = body.endpoint;
   if (typeof endpoint !== 'string' || endpoint === '') {
     throw new ApiError(400, 'endpoint required');
   }
-  // Idempotent: deleting a missing endpoint is fine.
-  await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').bind(endpoint).run();
+  // Idempotent: deleting a missing (or someone else's) endpoint is fine.
+  await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?')
+    .bind(endpoint, user.id)
+    .run();
 }
