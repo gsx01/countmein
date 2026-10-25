@@ -5,7 +5,7 @@
 // tag (trip-<id>) so a newer one replaces the older in the tray instead of
 // stacking, without re-alerting (renotify off).
 
-const SHELL_CACHE = 'countmein-shell-v2';
+const SHELL_CACHE = 'countmein-shell-v3';
 const SHELL_URL = '/';
 const ASSET_PREFIX = '/assets/';
 
@@ -63,7 +63,12 @@ self.addEventListener('fetch', (event) => {
     (async () => {
       try {
         const fresh = await fetch(req);
-        if (fresh.ok) {
+        // Only the app page may become the offline shell: a navigation straight
+        // to /api/state would otherwise replace it with JSON and drop the bundle.
+        const isShell =
+          !url.pathname.startsWith('/api/') &&
+          (fresh.headers.get('content-type') || '').includes('text/html');
+        if (fresh.ok && isShell) {
           const cache = await caches.open(SHELL_CACHE);
           event.waitUntil(cacheShell(cache, fresh.clone()).catch(() => {}));
         }
