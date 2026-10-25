@@ -69,6 +69,7 @@ async function call<T = AppState>(path: string, init?: RequestInit): Promise<T> 
   try {
     data = await res.json();
   } catch {
+    if (init?.signal?.aborted) throw new ApiError(0, 'network error');
     // leave data null
   }
   if (!res.ok) {
@@ -108,7 +109,14 @@ export const subscribePush = (sub: PushSubscribeBody) =>
 export const unsubscribePush = (endpoint: string) =>
   callVoid('/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) });
 
-export const getState = () => call('/state');
+// The calls the app retries on its own (the resume refresh, the leave queue) give
+// up after this, so a hung request fails like any network error instead of
+// blocking every later attempt. Only calls that are safe to repeat use it: a
+// timed-out write may still have landed.
+const BACKGROUND_TIMEOUT_MS = 15_000;
+const background = () => AbortSignal.timeout(BACKGROUND_TIMEOUT_MS);
+
+export const getState = () => call('/state', { signal: background() });
 
 // Update the current user's own notification preferences (a partial set of
 // category -> boolean). Returns fresh state so `me.prefs` reflects the change.
@@ -173,10 +181,12 @@ export const setDriver = (tripId: number, driver_id: number | null) =>
 
 // The driver signals departure (one-shot per trip); works even after the trip
 // locks. `leftAt` is the tap time of a queued tap; without it the server uses now.
+// Safe to time out: a retry of a send that landed gets `409 already left`.
 export const setLeaving = (tripId: number, leftAt?: string) =>
   call(`/trips/${tripId}/leaving`, {
     method: 'POST',
     body: leftAt === undefined ? undefined : JSON.stringify({ left_at: leftAt }),
+    signal: background(),
   });
 
 export interface DestinationInput {
