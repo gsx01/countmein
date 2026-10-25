@@ -4,7 +4,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { localDatePlus, weekdayOf } from '../src/time';
 import type { AppState, Response as RiderResponse, Trip } from '../src/types';
-import { BASE, CONFIG, ROOT, STATE, VIDEO } from './env';
+import { RFC8291_UA } from '../test/push-decrypt';
+import { BASE, CONFIG, PUSH_BASE, ROOT, STATE, VIDEO } from './env';
+import { startPushService, type PushService } from './push-service';
 
 export { expect };
 
@@ -68,6 +70,8 @@ export interface Scenario {
   trips: ScenarioTrip[];
   riders?: ScenarioRider[];
   disabled?: Who[];
+  // Subscribed to the fake push service at `${PUSH_BASE}/<who>`.
+  subscriptions?: Who[];
 }
 
 const sql = (v: string | number | null | undefined) =>
@@ -108,6 +112,11 @@ export function reset(scenario: Scenario): void {
   }
   for (const who of scenario.disabled ?? []) {
     lines.push(`UPDATE users SET enabled = 0 WHERE id = ${USERS[who].id};`);
+  }
+  for (const who of scenario.subscriptions ?? []) {
+    lines.push(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at) VALUES (${USERS[who].id}, ${sql(`${PUSH_BASE}/${who}`)}, ${sql(RFC8291_UA.publicKey)}, ${sql(RFC8291_UA.authSecret)}, ${at});`,
+    );
   }
 
   const file = path.join(ROOT, STATE, 'reset.sql');
@@ -227,7 +236,16 @@ const slug = (s: string) => s.replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, ''
 // purpose, and the browser reports each failed request this way.
 const ALLOWED_CONSOLE_ERRORS: RegExp[] = [/^Failed to load resource: /];
 
-export const test = base.extend<{ guard: void; consoleErrors: void }>({
+export const test = base.extend<{ guard: void; consoleErrors: void }, { pushService: PushService }>({
+  // Started for the first test that asks for it; specs clear() it per test.
+  pushService: [
+    async ({}, use) => {
+      const service = await startPushService();
+      await use(service);
+      await service.close();
+    },
+    { scope: 'worker' },
+  ],
   // Every test fails on an uncaught page exception or a console.error in any page
   // of its context.
   consoleErrors: [
