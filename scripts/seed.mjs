@@ -41,7 +41,11 @@ const users = USERS.map((u) => ({ ...u, token: newToken() }));
 const values = users
   .map((u) => `(${u.id}, '${u.name}', ${u.is_admin}, '${u.pickup_label}', '${u.token}', '${now}')`)
   .join(',\n  ');
-const sql = `INSERT OR REPLACE INTO users (id, name, is_admin, pickup_label, token, created_at) VALUES\n  ${values};\n`;
+const ids = users.map((u) => u.id).join(', ');
+// Rotating a token must also drop that user's push subscriptions, as rotateToken does.
+const sql =
+  `DELETE FROM push_subscriptions WHERE user_id IN (${ids});\n` +
+  `INSERT OR REPLACE INTO users (id, name, is_admin, pickup_label, token, created_at) VALUES\n  ${values};\n`;
 
 // Write to the OS temp dir (not the repo) and delete right after: the file holds
 // live tokens and must never be committed or left lying around.
