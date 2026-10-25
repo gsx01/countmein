@@ -798,6 +798,25 @@ async function patchPrefs(request: Request, env: Env, user: User): Promise<void>
     .run();
 }
 
+// The Worker POSTs every push to the stored endpoint with a VAPID JWT naming
+// VAPID_SUBJECT, so only the browsers' own push services are accepted.
+const PUSH_HOSTS = [
+  /^fcm\.googleapis\.com$/,
+  /(^|\.)push\.services\.mozilla\.com$/,
+  /(^|\.)push\.apple\.com$/,
+  /\.notify\.windows\.com$/,
+];
+
+function isPushServiceUrl(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  return url.protocol === 'https:' && PUSH_HOSTS.some((h) => h.test(url.hostname));
+}
+
 async function subscribePush(request: Request, env: Env, user: User): Promise<void> {
   const body = await readBody(request);
   const endpoint = body.endpoint;
@@ -813,6 +832,9 @@ async function subscribePush(request: Request, env: Env, user: User): Promise<vo
     auth === ''
   ) {
     throw new ApiError(400, 'endpoint and keys.p256dh/auth required');
+  }
+  if (!isPushServiceUrl(endpoint)) {
+    throw new ApiError(400, 'endpoint must be a known push service');
   }
 
   // Upsert on the unique endpoint: a re-subscribe (key rotation, or the same

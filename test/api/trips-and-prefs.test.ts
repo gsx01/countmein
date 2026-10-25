@@ -113,6 +113,7 @@ describe('PATCH /api/prefs', () => {
 });
 
 describe('POST /api/push/subscribe and unsubscribe', () => {
+  const FCM = 'https://fcm.googleapis.com/fcm/send/a';
   const sub = (token: string, endpoint: string, p256dh = 'key-1') =>
     call(token, 'POST', '/api/push/subscribe', { endpoint, keys: { p256dh, auth: 'auth-1' } });
   const owner = (endpoint: string) =>
@@ -124,31 +125,50 @@ describe('POST /api/push/subscribe and unsubscribe', () => {
     (await query<{ n: number }>('SELECT COUNT(*) AS n FROM push_subscriptions'))?.n;
 
   it('stores a subscription and returns 204', async () => {
-    const res = await sub(TOKENS.rider, 'https://push.test/a');
+    const res = await sub(TOKENS.rider, FCM);
     expect(res.status).toBe(204);
     expect(res.json).toBeNull();
-    expect(await owner('https://push.test/a')).toEqual({ user_id: RIDER, p256dh: 'key-1' });
+    expect(await owner(FCM)).toEqual({ user_id: RIDER, p256dh: 'key-1' });
   });
 
   it('reassigns the owner and keys on re-subscribe', async () => {
-    await sub(TOKENS.rider, 'https://push.test/a');
-    expect((await sub(TOKENS.driver, 'https://push.test/a', 'key-2')).status).toBe(204);
-    expect(await owner('https://push.test/a')).toEqual({ user_id: DRIVER, p256dh: 'key-2' });
+    await sub(TOKENS.rider, FCM);
+    expect((await sub(TOKENS.driver, FCM, 'key-2')).status).toBe(204);
+    expect(await owner(FCM)).toEqual({ user_id: DRIVER, p256dh: 'key-2' });
     expect(await count()).toBe(1);
   });
 
   it.each([
     ['no endpoint', { keys: { p256dh: 'k', auth: 'a' } }],
-    ['no keys', { endpoint: 'https://push.test/a' }],
-    ['an empty auth', { endpoint: 'https://push.test/a', keys: { p256dh: 'k', auth: '' } }],
+    ['no keys', { endpoint: FCM }],
+    ['an empty auth', { endpoint: FCM, keys: { p256dh: 'k', auth: '' } }],
   ])('rejects %s with 400', async (_name, body) => {
     expect((await call(TOKENS.rider, 'POST', '/api/push/subscribe', body)).status).toBe(400);
   });
 
+  it.each([
+    'https://fcm.googleapis.com/fcm/send/abc',
+    'https://updates.push.services.mozilla.com/wpush/v2/abc',
+    'https://web.push.apple.com/abc',
+    'https://wns2-par02p.notify.windows.com/w/?token=abc',
+  ])('accepts the push service endpoint %s', async (endpoint) => {
+    expect((await sub(TOKENS.rider, endpoint)).status).toBe(204);
+  });
+
+  it.each([
+    ['plain http', 'http://fcm.googleapis.com/fcm/send/abc'],
+    ['an unknown host', 'https://anything.example:8080/path'],
+    ['a lookalike host', 'https://fcm.googleapis.com.evil.example/abc'],
+    ['a host only ending in a known name', 'https://evilpush.apple.com/abc'],
+    ['not a URL', 'not a url'],
+  ])('rejects %s as an endpoint with 400', async (_name, endpoint) => {
+    expect((await sub(TOKENS.rider, endpoint)).status).toBe(400);
+    expect(await count()).toBe(0);
+  });
+
   it('deletes idempotently', async () => {
-    await sub(TOKENS.rider, 'https://push.test/a');
-    const del = () =>
-      call(TOKENS.rider, 'POST', '/api/push/unsubscribe', { endpoint: 'https://push.test/a' });
+    await sub(TOKENS.rider, FCM);
+    const del = () => call(TOKENS.rider, 'POST', '/api/push/unsubscribe', { endpoint: FCM });
     expect((await del()).status).toBe(204);
     expect(await count()).toBe(0);
     expect((await del()).status).toBe(204);
