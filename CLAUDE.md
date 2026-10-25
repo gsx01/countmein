@@ -45,7 +45,7 @@ migrations are user-run too (`! npm run migrate`).
 - `src/constants.ts`, `src/types.ts` - shared by Worker and web.
 - `web/` - Preact SPA (`app.tsx`, `api-client.ts`, `push-client.ts`, `push-token.ts`, `maps.ts`,
   `route.ts`, `resume.ts`, `state-cache.ts`, `leave-queue.ts`, `leave-window.ts`,
-  `trip-anchor.ts`, `config.ts`, `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`, `manifest.webmanifest`,
+  `trip-anchor.ts`, `config.ts`, `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`, `_headers`, `manifest.webmanifest`,
   `favicon.png`). `maps.ts` lazily loads the Google Maps SDK; `route.ts` computes
   the ETA and pin order.
 - `migrations/` (`0001_init.sql` .. `0016_multi_trip_day.sql`), `scripts/seed.mjs`,
@@ -154,6 +154,12 @@ migrations are user-run too (`! npm run migrate`).
   (`web/trip-anchor.ts`): the app scrolls to it after the first load, and on a
   `hashchange` (a push tapped while the app is open is a same-document
   navigation) it runs a forced silent refresh first.
+  `POST /api/push/subscribe` accepts only `https:` endpoints on a known push
+  service host (FCM, Mozilla, Apple, WNS), since the Worker POSTs there with a
+  JWT naming `VAPID_SUBJECT`. An existing endpoint moves to another user only
+  when the request carries the same `auth` secret (a shared device); otherwise
+  it is a silent no-op. Unsubscribe deletes only the caller's own row. `sw.js`
+  opens only same-origin notification links.
 - Resume and offline (client only):
   - `resume.ts` refetches silently (no `loading`, so open maps and drafts stay
     mounted) on `visibilitychange` -> visible, `pageshow` persisted, `online`,
@@ -164,7 +170,8 @@ migrations are user-run too (`! npm run migrate`).
     token. When a fetch fails with a network error the app shows that state with
     an "Offline - data from HH:MM" banner, and every card is read-only except
     "I'm leaving". `sw.js` precaches the shell and the hashed `/assets/*` so a
-    cold start works offline.
+    cold start works offline. Only a `text/html` navigation outside `/api/`
+    replaces the cached shell, so opening `/api/state` as a page can't.
   - `leave-queue.ts`: an "I'm leaving" tap is stored (with its tap time and
     token) before any network call, and the card shows "Left HH:MM -
     sending...". The queue flushes after the first load, on resume, on `online`,
@@ -182,7 +189,12 @@ migrations are user-run too (`! npm run migrate`).
   (409); a PATCH leaving zero enabled admins is rejected 400. Tokens never appear
   in `GET /api/state`.
 - Error codes: 400 bad body, 401 bad/missing token, 403 not authorized, 409
-  locked/cancelled.
+  locked/cancelled. Path ids are digits only (`1e0`, `0x1`, `01` are 400).
+- Every response carries `X-Content-Type-Options: nosniff` and
+  `Content-Security-Policy: frame-ancestors 'none'`: static assets via
+  `web/public/_headers`, `/api/*` via `json()`/`noContent()` in `src/api.ts`
+  (`_headers` never reaches the Worker). Referrer-Policy stays at the browser
+  default because the referrer-restricted Maps key depends on it.
 
 ## Commands
 
