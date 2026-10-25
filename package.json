@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "vite build && wrangler deploy --env=\"\"",
+    "deploy": "node scripts/check-migrations.mjs countmein --remote --env=\"\" && vite build && wrangler deploy --env=\"\"",
     "migrate": "wrangler d1 migrations apply countmein --remote --env=\"\"",
     "deploy:staging": "vite build --mode staging && wrangler deploy --env staging",
     "migrate:staging": "wrangler d1 migrations apply countmein-staging --remote --env staging",
