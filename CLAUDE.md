@@ -194,7 +194,10 @@ of its schema 500s every `GET /api/state`, so both deploy scripts guard it:
     and every 60s while visible, all behind one 10s throttle. Triggers that fire
     while a refresh runs join it (the throttle is stamped only after the leave
     flush), so a burst costs one fetch. A failed fetch never consumes the
-    throttle. Route points are keyed on content (`routeKey`)
+    throttle. `getState` and `setLeaving` give up after 15s (`AbortSignal.timeout`
+    in `api-client.ts`), so a hung request fails as a network error instead of
+    blocking later refreshes or the leave queue. Only those two, being safe to
+    repeat; user-triggered writes wait, since a timed-out write may have landed. Route points are keyed on content (`routeKey`)
     so an unchanged refresh doesn't redraw markers.
   - `state-cache.ts` keeps the last good state in `localStorage`, keyed to the
     token. When a fetch fails with a network error the app shows that state with
