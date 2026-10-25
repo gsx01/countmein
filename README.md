@@ -104,10 +104,10 @@ unapplied migrations (or when it can't tell); run `npm run migrate` first.
 Distribute each printed `/?t=<token>` link to its owner. Re-running `seed`
 rotates tokens (old links die). After the initial seed an admin adds and manages
 users in-app. A `[env.staging]` Worker mirrors this for a staging deploy:
-`npm run deploy:staging` applies pending staging migrations, builds, deploys, and
-then runs `npm run smoke:staging` (needs `STAGING_URL` in `.env`), which checks
-the shell, the service worker, the manifest and `/api/state` with and without a
-token.
+`npm run deploy:staging` stops before changing anything unless `STAGING_URL` is
+set in `.env`, then applies pending staging migrations, builds, deploys, and runs
+the smoke check (`npm run smoke:staging`), which checks the shell, the service
+worker, the manifest and `/api/state` with and without a token.
 
 ## Notes
 

@@ -26,9 +26,11 @@ of its schema 500s every `GET /api/state`, so both deploy scripts guard it:
   and refuses to build or deploy while anything is pending, or when the check
   itself fails (unknown is not clean). Prod migrations stay user-run
   (`! npm run migrate`); nothing applies one implicitly.
-- `npm run deploy:staging` runs `migrate:staging` first (a no-op when nothing is
-  pending; without a TTY wrangler's confirm answers yes), then builds and
-  deploys, then runs `npm run smoke:staging` against the deployed Worker.
+- `npm run deploy:staging` first requires `STAGING_URL` (`smoke.mjs
+  --check-env`, before anything changes), then runs `migrate:staging` (a no-op
+  when nothing is pending; without a TTY wrangler's confirm answers yes), builds
+  and deploys, and ends with the smoke check against the deployed Worker
+  (`--after-deploy`: a failure there says the deploy itself succeeded).
 
 ## Layout
 
@@ -68,8 +70,10 @@ of its schema 500s every `GET /api/state`, so both deploy scripts guard it:
   Worker config `wrangler.e2e.toml` (office `@TestOffice`, no Maps key). E2E runs
   only locally, never against staging or production.
   - Every test fails on an uncaught page exception or a `console.error` in any
-    page of its context; only "Failed to load resource" (the browser's line for
-    a failed request) is allowed, in `ALLOWED_CONSOLE_ERRORS`.
+    page of its context. The only exception is "Failed to load resource" (the
+    browser's line for a failed request) for a URL in `ALLOWED_FAILED_URLS`:
+    the e2e API (specs fail it on purpose) and the aborted Maps SDK. Add an
+    entry only with its reason.
   - `e2e/env.ts` makes a VAPID pair per run (kept in `process.env.E2E_VAPID` so
     Playwright workers share it, never written to disk); the config passes it to
     `wrangler dev` with `--var`, so the e2e Worker really signs and sends.
