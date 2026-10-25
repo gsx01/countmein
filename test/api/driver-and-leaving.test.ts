@@ -33,11 +33,20 @@ const leftAt = async (id: number) =>
 beforeEach(() => seedUsers());
 
 describe('POST /api/trips/:id/driver', () => {
-  it('lets any user assign the driver', async () => {
+  it('lets any user take the driver role themselves', async () => {
     const T = await trip();
-    const res = await post('pending', T, 'driver', { driver_id: RIDER });
+    const res = await post('pending', T, 'driver', { driver_id: PENDING });
     expect(res.status).toBe(200);
-    expect(tripIn(res.json, T).driver?.id).toBe(RIDER);
+    expect(tripIn(res.json, T).driver?.id).toBe(PENDING);
+  });
+
+  it.each([
+    ['another user', RIDER],
+    ['an unknown user', 99],
+  ])('rejects assigning %s with 403', async (_name, driver_id) => {
+    const T = await trip();
+    expect((await post('pending', T, 'driver', { driver_id })).status).toBe(403);
+    expect((await post('driver', T, 'driver', { driver_id })).status).toBe(403);
   });
 
   it('allows clearing the driver', async () => {
@@ -48,7 +57,6 @@ describe('POST /api/trips/:id/driver', () => {
   });
 
   it.each([
-    ['an unknown user', 99],
     ['a non-integer', 1.5],
     ['a string', '2'],
   ])('rejects %s with 400', async (_name, driver_id) => {
@@ -56,18 +64,12 @@ describe('POST /api/trips/:id/driver', () => {
     expect((await post('rider', T, 'driver', { driver_id })).status).toBe(400);
   });
 
-  it('rejects a disabled user with 400', async () => {
-    const T = await trip();
-    await query('UPDATE users SET enabled = 0 WHERE id = ?', PENDING);
-    expect((await post('rider', T, 'driver', { driver_id: PENDING })).status).toBe(400);
-  });
-
   it('rejects a locked trip', async () => {
     const L = await lockedTrip();
     expect((await post('rider', L, 'driver', { driver_id: RIDER })).status).toBe(409);
   });
 
-  it('pushes the riders and the previous driver, not the actor or the new driver', async () => {
+  it('pushes the riders and the previous driver, not the new driver', async () => {
     const T = await trip();
     const now = new Date().toISOString();
     await query(
@@ -84,10 +86,10 @@ describe('POST /api/trips/:id/driver', () => {
     await subscribeAll();
     await subscribe(4, 'https://push.test/extra');
     const spy = spyPush();
-    await post('rider', T, 'driver', { driver_id: PENDING }, e);
-    expect(pushedTo(spy)).toEqual([ENDPOINTS.driver, 'https://push.test/extra']);
+    await post('pending', T, 'driver', { driver_id: PENDING }, e);
+    expect(pushedTo(spy)).toEqual([ENDPOINTS.driver, 'https://push.test/extra', ENDPOINTS.rider]);
     spy.mockClear();
-    await post('rider', T, 'driver', { driver_id: PENDING }, e);
+    await post('pending', T, 'driver', { driver_id: PENDING }, e);
     expect(spy).not.toHaveBeenCalled();
   });
 });

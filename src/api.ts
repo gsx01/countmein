@@ -653,8 +653,8 @@ async function cancel(
   }
 }
 
-// Any enabled user may set or clear a trip's driver (decision 1.3). The new
-// driver must be an enabled user, or null to leave the trip without one.
+// Any enabled user may take a trip's driver role themselves or clear it, but
+// never hand it to someone else: driver_id is the caller's own id or null.
 async function setDriver(
   request: Request,
   env: Env,
@@ -672,14 +672,10 @@ async function setDriver(
     throw new ApiError(400, 'driver_id must be an integer or null');
   }
 
-  let driverName: string | null = null;
-  if (driverId !== null) {
-    const driver = await env.DB.prepare('SELECT name FROM users WHERE id = ? AND enabled = 1')
-      .bind(driverId)
-      .first<{ name: string }>();
-    if (!driver) throw new ApiError(400, 'driver_id is not an enabled user');
-    driverName = driver.name;
+  if (driverId !== null && driverId !== user.id) {
+    throw new ApiError(403, 'you can only make yourself the driver');
   }
+  const driverName = driverId === null ? null : user.name;
 
   await env.DB.prepare('UPDATE trips SET driver_id = ? WHERE id = ?')
     .bind(driverId, tripId)
