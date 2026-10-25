@@ -46,11 +46,11 @@ import {
   type RouteResult,
 } from './route';
 import {
-  currentSubscription,
   disablePush,
   enablePush,
   iosNeedsInstall,
   pushSupported,
+  registeredSubscription,
 } from './push-client';
 import { useResumeRefresh } from './resume';
 import { tripAnchor, tripIdFromHash } from './trip-anchor';
@@ -877,7 +877,7 @@ function PushToggle() {
 
   useEffect(() => {
     if (!supported) return;
-    void currentSubscription().then((sub) => setSubscribed(sub !== null));
+    void registeredSubscription().then((sub) => setSubscribed(sub !== null));
   }, [supported]);
 
   if (!supported) {

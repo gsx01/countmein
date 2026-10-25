@@ -1,5 +1,6 @@
 import { VAPID_PUBLIC_KEY } from './vapid';
-import { subscribePush, unsubscribePush } from './api-client';
+import { getToken, subscribePush, unsubscribePush } from './api-client';
+import { clearRegistered, isRegistered, markRegistered } from './push-token';
 
 export const pushSupported = () =>
   'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -30,10 +31,17 @@ async function registration(): Promise<ServiceWorkerRegistration> {
   return navigator.serviceWorker.register('/sw.js');
 }
 
-export async function currentSubscription(): Promise<PushSubscription | null> {
+async function currentSubscription(): Promise<PushSubscription | null> {
   if (!pushSupported()) return null;
   const reg = await navigator.serviceWorker.getRegistration();
   return reg ? reg.pushManager.getSubscription() : null;
+}
+
+// The browser subscription, but only if the server row for it was stored under
+// the current token.
+export async function registeredSubscription(): Promise<PushSubscription | null> {
+  const sub = await currentSubscription();
+  return sub && isRegistered(getToken(), sub.endpoint) ? sub : null;
 }
 
 // Registers the SW, requests permission, subscribes, and stores the row. Returns
@@ -57,10 +65,13 @@ export async function enablePush(): Promise<PushSubscription | null> {
   const auth = json.keys?.auth;
   if (!p256dh || !auth) throw new Error('subscription missing keys');
   await subscribePush({ endpoint: sub.endpoint, keys: { p256dh, auth } });
+  const token = getToken();
+  if (token) markRegistered(token, sub.endpoint);
   return sub;
 }
 
 export async function disablePush(): Promise<void> {
+  clearRegistered();
   const sub = await currentSubscription();
   if (!sub) return;
   const endpoint = sub.endpoint;
