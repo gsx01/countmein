@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "deploy": "node scripts/check-migrations.mjs countmein --remote --env=\"\" && vite build && wrangler deploy --env=\"\"",
     "migrate": "wrangler d1 migrations apply countmein --remote --env=\"\"",
-    "deploy:staging": "npm run migrate:staging && vite build --mode staging && wrangler deploy --env staging && npm run smoke:staging",
+    "deploy:staging": "node scripts/smoke.mjs --check-env && npm run migrate:staging && vite build --mode staging && wrangler deploy --env staging && node scripts/smoke.mjs --after-deploy",
     "migrate:staging": "wrangler d1 migrations apply countmein-staging --remote --env staging",
     "smoke:staging": "node scripts/smoke.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.worker.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p test/tsconfig.json",
