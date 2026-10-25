@@ -19,6 +19,9 @@ map. `CLAUDE.md` is the working guide to the layout and invariants.
   everyone. Lock state is computed, never stored.
 - Riders start `pending` and opt in with a pickup spot (or opt out). The trip's
   driver sets the ETD and destination and can cancel while unlocked.
+- The driver can set a meetup: one pickup spot where every rider meets them. The
+  trip's time then means "driver is at the meetup", and the route and ETA count
+  from there (when to leave home, when to arrive).
 - Web Push covers relevant changes plus an evening-before reminder; each user
   controls which categories they receive. An admin manages users in-app.
 

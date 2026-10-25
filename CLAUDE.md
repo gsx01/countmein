@@ -100,18 +100,19 @@ migrations are user-run too (`! npm run migrate`).
   listed as "<trip> - trip updated"). The driver card drafts all three behind one
   "Save changes". `POST /api/trips/:id/etd` stays for the roster's "Apply" on a
   rider's suggested time. Cancelling sits apart, behind a two-step confirm.
-- Meetup suggestion: the driver may suggest one spot per trip
-  (`trips.meetup_label`) from the live pickup list via the PATCH above
-  (`meetup_label: label | null`; unknown label 400, cancelled 409). It changes
-  nobody's pickup. Accepting is derived, not stored: a rider has
-  accepted when `pickup_spot === meetup_label`, and the client accepts through the
-  participation route. Only "Keep mine" is stored: `POST
-  /api/trips/:id/meetup/decline` (no body; the driver 403; not `in`, locked,
-  cancelled or no live suggestion 409) sets `participation.meetup_declined`, and
-  any label change resets it to 0 for everyone. The suggestion survives a driver
-  change. `buildState` returns `meetup_label: null` when the stored label is not
-  in the live spot list, without clearing it. A rider who is not `in` (pending or
-  out) sees the suggestion as text, and their pickup select is preselected to it.
+- Meetup: the driver may set one spot per trip (`trips.meetup_label`) from the
+  live pickup list via the PATCH above (`meetup_label: label | null`; unknown
+  label 400, cancelled 409). It is where EVERY rider meets the driver, and while
+  it is live the trip's `etd` means "driver is at the meetup", not "leaves home":
+  the card reads "Meet 08:15 at @Alice", the driver's time field is "Meet time",
+  and the lock, leave window, push copy and reminder all use that time. In
+  `buildState` every `in` rider's `pickup_spot` is the meetup; their stored spot
+  is untouched and comes back when the meetup is cleared or goes stale. The
+  rider's pickup select is replaced by "Meetup at <label>", and "I'm in" joins
+  there. `buildState` returns `meetup_label: null` when the stored label is not in
+  the live spot list, without clearing it. The meetup survives a driver change.
+  `participation.meetup_declined` is a leftover column from the old "Keep mine";
+  nothing reads it.
 - Notes: one driver `trips.note` and one `participation.note` per rider, trimmed,
   <= 280 chars (empty -> NULL). Riders may suggest an ETD; the driver applies it
   by posting to the ETD route.
@@ -121,25 +122,30 @@ migrations are user-run too (`! npm run migrate`).
   NULL resolves to the office (`OFFICE_DESTINATION`, via `src/config.ts`).
   `POST /api/trips/:id/destination` (driver, unlocked) sets/clears it; no push.
   The SDK loads on demand in `web/maps.ts`; the per-card map + ETA fire only on
-  "Show route". The public Maps key + Map ID are referrer-restricted client config
+  "Show route". With a meetup it is the route's only stop (even before anyone is
+  in) and `routeTimes` (`web/route.ts`) counts back from it to "Driver leaves
+  home" and forward to the arrival; Navigate goes via it too. The public Maps key + Map ID are referrer-restricted client config
   injected from `.env` via `vite.config.ts` (see `web/config.ts`), never secrets.
 - Web Push, two sources, both best-effort (send failures swallowed, 404/410 prunes
   the subscription, no retry):
   - On-change (`notify.ts`): a write pushes only when it changes the stored value.
     A rider action notifies the driver; a driver action (trip settings, cancel,
     leaving) notifies the non-out riders; a driver change
-    also notifies the previous driver. Clearing a meetup or declining it pushes
-    nothing. The actor is never pushed.
+    also notifies the previous driver. The actor is never pushed.
   - Evening reminder (`reminder.ts`, gated in `cron.ts` to Amsterdam-local 20:00):
     for tomorrow's live trips, nudges pending riders and confirms to `in` riders +
     the driver. A trip with no driver gets the no-driver alert ("No driver for
     tomorrow" / "<trip> - can you drive?") instead, to every non-out rider (in and
     pending). Claimed once per trip (`reminder_sent_at`) before sending, so a
     driver assigned (or lost) after 20:00 triggers no second reminder. Two trips
-    tomorrow mean two separate reminders.
+    tomorrow mean two separate reminders. A live meetup is named after the time
+    ("You're in - Mon 12 Oct 08:15 at @Alice").
   Push copy names a trip by day AND time via `tripLabel` (`src/time.ts`): "Mon 12
   Oct 08:00". On-change pushes use the trip as stored before the write, so an ETD
-  change names the old time ("Mon 12 Oct 08:00 - ETD now 09:00").
+  change names the old time ("Mon 12 Oct 08:00 - ETD now 09:00"). With a meetup,
+  time and spot read as one line ("Mon 12 Oct 08:00 - meet at @Alice 08:15"), a
+  new time beside a new meetup is folded into it (`timeAndMeetupUpdates`), and
+  clearing a live meetup pushes "meetup cleared".
   Each user has a `pref_<category>` flag (six categories in `types.ts`); a push to
   a user who turned that category off is dropped. `PATCH /api/prefs` edits your own
   flags. Sends run via `ctx.waitUntil`; payloads carry the recipient's own
