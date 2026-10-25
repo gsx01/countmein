@@ -22,7 +22,7 @@ export default defineConfig({
         },
         test: {
           name: 'unit',
-          include: ['src/**/*.test.ts', 'web/**/*.test.ts'],
+          include: ['src/**/*.test.ts', 'web/**/*.test.ts', 'test/*.test.ts'],
         },
       },
       {
