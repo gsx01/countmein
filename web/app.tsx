@@ -983,7 +983,9 @@ function TripCard({
           {!cancelled && trip.locked && <span class="badge locked">Locked</span>}
         </span>
       </div>
-      <div class="etd">Leaves {trip.etd}</div>
+      <div class="etd">
+        {trip.meetup_label ? `Meet ${trip.etd} at ${trip.meetup_label}` : `Leaves ${trip.etd}`}
+      </div>
 
       <div class="driver">
         <span>Driver: {trip.driver ? trip.driver.name : 'no driver yet'}</span>
@@ -1251,19 +1253,6 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
 
   return (
     <div class="controls">
-      <div class="row">
-        <label for={`${id}-etd`}>Leaves</label>
-        <div class="field">
-          <input
-            id={`${id}-etd`}
-            type="time"
-            value={etd}
-            disabled={busy}
-            onInput={(e) => setEtdValue((e.target as HTMLInputElement).value)}
-          />
-        </div>
-      </div>
-
       {!cancelled && (
         <div class="row">
           <label for={`${id}-meetup`}>Meetup</label>
@@ -1284,6 +1273,20 @@ function DriverControls({ trip, spots, apply }: Omit<CardProps, 'me'>) {
           </div>
         </div>
       )}
+
+      {/* With a meetup the trip's time is when the driver is there. */}
+      <div class="row">
+        <label for={`${id}-etd`}>{meetup ? 'Meet time' : 'Leaves'}</label>
+        <div class="field">
+          <input
+            id={`${id}-etd`}
+            type="time"
+            value={etd}
+            disabled={busy}
+            onInput={(e) => setEtdValue((e.target as HTMLInputElement).value)}
+          />
+        </div>
+      </div>
 
       <div class="row">
         <label for={`${id}-note`}>Trip note</label>

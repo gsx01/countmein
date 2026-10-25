@@ -86,10 +86,10 @@ test('the driver saves several settings in one write', async ({ page }) => {
     card(page, T)
       .locator('.row')
       .filter({ has: page.locator('label', { hasText: new RegExp(`^${label}$`) }) });
-  await as(page, 'driver', T, 'edit ETD, meetup and note, then save once');
+  await as(page, 'driver', T, 'edit meetup, meet time and note, then save once');
   await expect(save).toBeDisabled();
-  await field('Leaves').locator('input[type="time"]').fill('07:45');
   await field('Meetup').locator('select').selectOption(USERS.rider.label);
+  await field('Meet time').locator('input[type="time"]').fill('07:45');
   await field('Trip note').locator('input').fill('  bring snacks ');
   const patches: string[] = [];
   page.on('request', (r) => {
@@ -103,6 +103,7 @@ test('the driver saves several settings in one write', async ({ page }) => {
     meetup_label: USERS.rider.label,
     note: 'bring snacks',
   });
+  await expect(card(page, T).locator('.etd')).toHaveText(`Meet 07:45 at ${USERS.rider.label}`);
 });
 
 test('the driver confirms before cancelling, then restores', async ({ page }) => {

@@ -94,8 +94,14 @@ async function toggleUser(page: Page, name: string, button: 'Disable' | 'Enable'
 test('01 set', async ({ page }) => {
   reset(start(null));
   await as(page, 'driver', T, 'set the meetup to @Driver');
+  await check(page, 'driver', 'time field reads "Leaves" with no meetup', () =>
+    expect(card(page, T).locator('label', { hasText: /^Leaves$/ })).toHaveCount(1),
+  );
   await setMeetupAsDriver(page, '@Driver');
   await as(page, 'driver', T, 'reloaded');
+  await check(page, 'driver', 'time field reads "Meet time"', () =>
+    expect(card(page, T).locator('label', { hasText: /^Meet time$/ })).toHaveCount(1),
+  );
   await check(page, 'driver', 'Meetup select shows @Driver after reload', () =>
     expect(meetupSelect(page)).toHaveValue('@Driver'),
   );
@@ -104,6 +110,9 @@ test('01 set', async ({ page }) => {
   );
 
   await as(page, 'rider', T, 'open my card');
+  await check(page, 'rider', 'header reads "Meet 08:00 at @Driver"', () =>
+    expect(card(page, T).locator('.etd')).toHaveText('Meet 08:00 at @Driver'),
+  );
   await check(page, 'rider', 'pickup reads "Meetup at @Driver", no select', async () => {
     await expect(meetupSpot(page)).toHaveText('Meetup at @Driver');
     await expect(pickupSelect(page)).toHaveCount(0);
@@ -183,6 +192,9 @@ test('05 clear returns own spots', async ({ page }) => {
     expectStatus(page, 'Rider', 'in - @Rider'),
   );
   await as(page, 'rider', T, 'open my card');
+  await check(page, 'rider', 'header back to "Leaves 08:00"', () =>
+    expect(card(page, T).locator('.etd')).toHaveText('Leaves 08:00'),
+  );
   await check(page, 'rider', 'pickup select back on @Rider', async () => {
     await expect(meetupSpot(page)).toHaveCount(0);
     await expect(pickupSelect(page)).toHaveValue('@Rider');
