@@ -1107,12 +1107,10 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
   return (
     <div class="controls">
       <div class="row">
-        <label for={`${id}-pickup`}>Pickup</label>
+        <label for={meetup ? undefined : `${id}-pickup`}>Pickup</label>
         <div class="field">
           {meetup ? (
-            <span id={`${id}-pickup`} class="meetup-spot">
-              Meetup at {meetup}
-            </span>
+            <span class="meetup-spot">Meetup at {meetup}</span>
           ) : (
             <select
               id={`${id}-pickup`}
