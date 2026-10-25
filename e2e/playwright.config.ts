@@ -1,14 +1,22 @@
 import { defineConfig, devices } from '@playwright/test';
-import { BASE, CONFIG, PORT, ROOT, SHOTS, STATE, VIDEO } from './env';
+import { BASE, CONFIG, PORT, ROOT, SHOTS, STATE, VAPID, VIDEO } from './env';
 
 const channel = process.env.PW_CHANNEL || undefined;
+
+const vars = [
+  `VAPID_PUBLIC_KEY:${VAPID.publicKey}`,
+  `VAPID_PRIVATE_KEY:${VAPID.privateKey}`,
+  `VAPID_SUBJECT:${VAPID.subject}`,
+]
+  .map((v) => `--var ${v}`)
+  .join(' ');
 
 // Playwright starts the webServer before any globalSetup, so the e2e build and
 // the local migrations run inside the server command, ahead of `wrangler dev`.
 const serve = [
   'npx vite build --mode e2e',
   `npx wrangler d1 migrations apply countmein-e2e --local --config ${CONFIG} --persist-to ${STATE}`,
-  `npx wrangler dev --config ${CONFIG} --persist-to ${STATE} --ip 127.0.0.1 --port ${PORT} --show-interactive-dev-session=false`,
+  `npx wrangler dev --config ${CONFIG} --persist-to ${STATE} --ip 127.0.0.1 --port ${PORT} --show-interactive-dev-session=false ${vars}`,
 ].join(' && ');
 
 // iPhone descriptors default to WebKit; only the viewport, scale, UA and touch

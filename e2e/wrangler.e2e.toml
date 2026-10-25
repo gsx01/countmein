@@ -1,6 +1,7 @@
 # Local-only Worker config for the Playwright E2E suite (`npm run e2e`). It runs
 # under `wrangler dev` with its own persisted D1 in e2e/.state and is never
-# deployed: no routes, no triggers, no secrets (so no push is ever sent).
+# deployed: no routes, no triggers. The VAPID vars come from a per-run key pair
+# passed with `--var` (see playwright.config.ts).
 
 name = "countmein-e2e"
 main = "../src/index.ts"
@@ -19,5 +20,4 @@ database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "../migrations"
 
 [vars]
-VAPID_PUBLIC_KEY = "e2e-public-key"
 OFFICE_DESTINATION = '{"label":"@TestOffice","lat":52.37,"lng":4.89,"place_id":null,"emoji":null}'
