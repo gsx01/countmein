@@ -43,7 +43,7 @@ migrations are user-run too (`! npm run migrate`).
 - `src/time.ts` - DST-correct Amsterdam helpers.
 - `src/config.ts` - resolves the office destination from `OFFICE_DESTINATION`.
 - `src/constants.ts`, `src/types.ts` - shared by Worker and web.
-- `web/` - Preact SPA (`app.tsx`, `api-client.ts`, `push-client.ts`, `maps.ts`,
+- `web/` - Preact SPA (`app.tsx`, `api-client.ts`, `push-client.ts`, `push-token.ts`, `maps.ts`,
   `route.ts`, `resume.ts`, `state-cache.ts`, `leave-queue.ts`, `leave-window.ts`,
   `trip-anchor.ts`, `config.ts`, `vapid.ts`, `styles.css`) + `web/public/` (`sw.js`, `manifest.webmanifest`,
   `favicon.png`). `maps.ts` lazily loads the Google Maps SDK; `route.ts` computes
@@ -174,7 +174,11 @@ migrations are user-run too (`! npm run migrate`).
 - User management is admin-only (`/api/users`, else 403): `GET` lists users with
   tokens; `POST` creates an enabled user (back-fills `pending` participation);
   `PATCH /:id` edits name/enabled/is_admin/pickup_label/address/emoji;
-  `POST /:id/rotate-token` reissues a token. Labels are unique among enabled users
+  `POST /:id/rotate-token` reissues a token and drops that user's push
+  subscriptions (as does `scripts/seed.mjs`), so a device that subscribed with a
+  leaked link can't receive the new token in a push link. The client remembers
+  the token and endpoint it registered under (`web/push-token.ts`) and offers
+  "Enable alerts" again when either differs. Labels are unique among enabled users
   (409); a PATCH leaving zero enabled admins is rejected 400. Tokens never appear
   in `GET /api/state`.
 - Error codes: 400 bad body, 401 bad/missing token, 403 not authorized, 409
