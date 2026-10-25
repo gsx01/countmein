@@ -10,6 +10,8 @@
 // on-change path: send failures are logged and swallowed, never retried.
 
 import type { Env } from './index';
+import { resolveOffice } from './config';
+import { isKnownSpot } from './db';
 import { localDatePlus, tripLabel } from './time';
 import { pushToUsers, type PushPayload } from './push';
 
@@ -18,6 +20,7 @@ interface EligibleTrip {
   trip_date: string;
   etd: string;
   driver_id: number | null;
+  meetup_label: string | null;
 }
 
 interface ParticipantRow {
@@ -92,7 +95,11 @@ async function remindTrip(env: Env, trip: EligibleTrip): Promise<void> {
   const recipients = planRecipients(trip.driver_id, rows.results);
   if (recipients.length === 0) return;
 
-  const day = tripLabel(trip.trip_date, trip.etd);
+  // With a live meetup the trip time is when the driver is there, so name both.
+  const live =
+    trip.meetup_label !== null && (await isKnownSpot(env.DB, trip.meetup_label, resolveOffice(env)));
+  const label = tripLabel(trip.trip_date, trip.etd);
+  const day = live ? `${label} at ${trip.meetup_label}` : label;
   await Promise.all(
     recipients.map((r) => {
       const { title, body } = copyFor(r.kind, day);
@@ -112,7 +119,7 @@ export async function sendReminders(env: Env, now: Date): Promise<void> {
     const tomorrow = localDatePlus(now, 1);
     const nowIso = now.toISOString();
     const trips = await env.DB.prepare(
-      `SELECT id, trip_date, etd, driver_id
+      `SELECT id, trip_date, etd, driver_id, meetup_label
          FROM trips
         WHERE trip_date = ? AND status != 'cancelled' AND reminder_sent_at IS NULL`,
     )

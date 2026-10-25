@@ -64,7 +64,13 @@ interface Sub {
 // substring. `claimed` records which trip ids have had reminder_sent_at set, so
 // the claim UPDATE reports 0 changes on a re-run (idempotency).
 function fakeDb(opts: {
-  trips: { id: number; trip_date: string; etd: string; driver_id: number | null }[];
+  trips: {
+    id: number;
+    trip_date: string;
+    etd: string;
+    driver_id: number | null;
+    meetup_label?: string | null;
+  }[];
   participants: { id: number; token: string; response: string; optedOut?: boolean }[];
   subs: Sub[];
 }) {
@@ -91,7 +97,11 @@ function fakeDb(opts: {
         },
         async all() {
           if (sql.includes('FROM trips')) {
-            return { results: opts.trips.filter((t) => !claimed.has(t.id)) };
+            return {
+              results: opts.trips
+                .filter((t) => !claimed.has(t.id))
+                .map((t) => ({ meetup_label: null, ...t })),
+            };
           }
           if (sql.includes('FROM participation')) {
             // The query filters on pref_evening_reminder = 1; drop opted-out users.
@@ -293,5 +303,35 @@ describe('sendReminders', () => {
       title: 'Trip tomorrow - are you in?',
       body: expect.stringMatching(/^Fri 11 Sept? 08:00$/),
     });
+  });
+
+  // The fake answers no spot lookup, so only the office label is live.
+  it('names a live meetup with the time', async () => {
+    const { db } = fakeDb({
+      trips: [{ id: 9, trip_date: '2026-09-11', etd: '08:15', driver_id: 1, meetup_label: '@Office' }],
+      participants: [
+        { id: 1, token: 't1', response: 'pending' },
+        { id: 2, token: 't2', response: 'in' },
+      ],
+      subs: [],
+    });
+
+    await sendReminders(await vapidEnv(db), now);
+
+    const sent = payloadsByUser();
+    expect(sent[1].body).toMatch(/^You're driving - Fri 11 Sept? 08:15 at @Office$/);
+    expect(sent[2].body).toMatch(/^You're in - Fri 11 Sept? 08:15 at @Office$/);
+  });
+
+  it('leaves out a meetup that is no longer a live spot', async () => {
+    const { db } = fakeDb({
+      trips: [{ id: 9, trip_date: '2026-09-11', etd: '08:15', driver_id: 1, meetup_label: '@Gone' }],
+      participants: [{ id: 2, token: 't2', response: 'in' }],
+      subs: [],
+    });
+
+    await sendReminders(await vapidEnv(db), now);
+
+    expect(payloadsByUser()[2].body).toMatch(/^You're in - Fri 11 Sept? 08:15$/);
   });
 });
