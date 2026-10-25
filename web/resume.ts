@@ -23,15 +23,26 @@ export function useResumeRefresh(
   enabled: boolean,
 ): (opts?: RefreshOptions) => Promise<void> {
   const refreshRef = useRef(refresh);
+  const inFlight = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     refreshRef.current = refresh;
   });
 
+  // The refresh may stamp `lastFetchAt` only after an await, so triggers in the
+  // same burst join the running refresh instead of each passing the throttle.
   const trigger = useCallback(
     async (opts?: RefreshOptions) => {
-      if (opts?.force || shouldFetch(Date.now(), lastFetchAt.current, MIN_GAP_MS)) {
+      if (!opts?.force && inFlight.current) return inFlight.current;
+      if (!opts?.force && !shouldFetch(Date.now(), lastFetchAt.current, MIN_GAP_MS)) return;
+      const run = (async () => {
         await refreshRef.current();
+      })();
+      inFlight.current = run;
+      try {
+        await run;
+      } finally {
+        if (inFlight.current === run) inFlight.current = null;
       }
     },
     [lastFetchAt],
