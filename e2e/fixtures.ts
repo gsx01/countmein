@@ -232,9 +232,17 @@ export async function forceRefresh(page: Page): Promise<void> {
 
 const slug = (s: string) => s.replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
 
-// Console errors a test may log. Specs go offline and provoke 4xx/5xx answers on
-// purpose, and the browser reports each failed request this way.
-const ALLOWED_CONSOLE_ERRORS: RegExp[] = [/^Failed to load resource: /];
+// The browser logs every failed request as a "Failed to load resource" console
+// error. These URL prefixes may fail; any other failed request fails the test.
+const ALLOWED_FAILED_URLS = [
+  // Specs go offline, abort API calls and provoke 4xx/5xx answers on purpose.
+  `${BASE}/api/`,
+  // The driver card loads the Maps SDK, which `guard` aborts (it is billable).
+  'https://maps.googleapis.com/',
+];
+
+const allowedConsoleError = (text: string, url: string) =>
+  /^Failed to load resource: /.test(text) && ALLOWED_FAILED_URLS.some((p) => url.startsWith(p));
 
 export const test = base.extend<{ guard: void; consoleErrors: void }, { pushService: PushService }>({
   // Started for the first test that asks for it; specs clear() it per test.
@@ -256,8 +264,9 @@ export const test = base.extend<{ guard: void; consoleErrors: void }, { pushServ
       });
       context.on('console', (m) => {
         if (m.type() !== 'error') return;
-        if (ALLOWED_CONSOLE_ERRORS.some((re) => re.test(m.text()))) return;
-        errors.push(`console.error ${m.text()} (${m.page()?.url() ?? m.location().url})`);
+        const url = m.location().url;
+        if (allowedConsoleError(m.text(), url)) return;
+        errors.push(`console.error ${m.text()} at ${url} (page ${m.page()?.url() ?? 'none'})`);
       });
       await use();
       expect(errors, 'page errors and console errors').toEqual([]);
