@@ -27,7 +27,7 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
-    await handleScheduled(env);
+  async scheduled(controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await handleScheduled(env, new Date(controller.scheduledTime));
   },
 } satisfies ExportedHandler<Env>;

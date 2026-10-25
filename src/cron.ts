@@ -5,11 +5,11 @@ import { localHour } from './time';
 
 // The Amsterdam-local hour the evening-before reminder fires. The two daily crons
 // run at 18:00 and 19:00 UTC; exactly one maps to this local hour in each DST
-// season, so the gate ensures the reminder pass runs once per evening.
+// season, so the gate ensures the reminder pass runs once per evening. `now` is
+// the tick's scheduled instant, so a late invocation still gates on its hour.
 const REMINDER_HOUR = 20;
 
-export async function handleScheduled(env: Env): Promise<void> {
-  const now = new Date();
+export async function handleScheduled(env: Env, now: Date): Promise<void> {
   await ensureTrips(env.DB, now);
   if (localHour(now) === REMINDER_HOUR) {
     await sendReminders(env, now);
