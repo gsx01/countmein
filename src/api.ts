@@ -42,6 +42,7 @@ const json = (data: unknown, status = 200) =>
 const noContent = () => new Response(null, { status: 204, headers: SECURITY_HEADERS });
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Digits only, so 1e0, 0x1, 1.0 and 01 aren't accepted as aliases of id 1.
 function parseId(raw: string, message: string): number {
@@ -49,7 +50,6 @@ function parseId(raw: string, message: string): number {
   if (!/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(id)) throw new ApiError(400, message);
   return id;
 }
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function tokenFrom(request: Request, url: URL): string | null {
   return url.searchParams.get('t') ?? request.headers.get('x-token');
