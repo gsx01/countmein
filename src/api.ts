@@ -27,13 +27,19 @@ class ApiError extends Error {
   }
 }
 
+// Mirrors web/public/_headers, which never reaches /api/* (the Worker answers it).
+const SECURITY_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'content-security-policy': "frame-ancestors 'none'",
+};
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...SECURITY_HEADERS },
   });
 
-const noContent = () => new Response(null, { status: 204 });
+const noContent = () => new Response(null, { status: 204, headers: SECURITY_HEADERS });
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
