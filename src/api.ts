@@ -653,8 +653,8 @@ async function cancel(
   }
 }
 
-// Any enabled user may take a trip's driver role themselves or clear it, but
-// never hand it to someone else: driver_id is the caller's own id or null.
+// Any enabled user may take a trip's driver role themselves, and only the
+// current driver may give it up (null). Nobody can hand it to someone else.
 async function setDriver(
   request: Request,
   env: Env,
@@ -674,6 +674,9 @@ async function setDriver(
 
   if (driverId !== null && driverId !== user.id) {
     throw new ApiError(403, 'you can only make yourself the driver');
+  }
+  if (driverId === null && user.id !== trip.driver_id) {
+    throw new ApiError(403, 'only the trip driver');
   }
   const driverName = driverId === null ? null : user.name;
 

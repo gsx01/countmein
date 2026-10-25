@@ -49,11 +49,20 @@ describe('POST /api/trips/:id/driver', () => {
     expect((await post('driver', T, 'driver', { driver_id })).status).toBe(403);
   });
 
-  it('allows clearing the driver', async () => {
+  it('lets the driver give up the role', async () => {
     const T = await trip();
-    const res = await post('rider', T, 'driver', { driver_id: null });
+    const res = await post('driver', T, 'driver', { driver_id: null });
     expect(res.status).toBe(200);
     expect(tripIn(res.json, T).driver).toBeNull();
+  });
+
+  it('rejects a non-driver clearing the driver with 403', async () => {
+    const T = await trip();
+    expect((await post('rider', T, 'driver', { driver_id: null })).status).toBe(403);
+    const row = await query<{ driver_id: number }>('SELECT driver_id FROM trips WHERE id = ?', T);
+    expect(row?.driver_id).toBe(DRIVER);
+    const N = await trip({ driverId: null });
+    expect((await post('rider', N, 'driver', { driver_id: null })).status).toBe(403);
   });
 
   it.each([
