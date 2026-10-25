@@ -1049,11 +1049,6 @@ function TripCard({
                   </span>
                 )}
                 {r.note && <span class="rider-note">"{r.note}"</span>}
-                {!readOnly && r.id !== me.id && (
-                  <button class="link" onClick={() => void apply(() => setDriver(trip.id, r.id))}>
-                    Make driver
-                  </button>
-                )}
               </span>
             </li>
           );
