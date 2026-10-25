@@ -3,7 +3,10 @@
 // token. The token is read from the staging D1 and never printed. One line per
 // check; exits 1 on any failure.
 //
-// Usage: node scripts/smoke.mjs   (npm run smoke:staging)
+// Usage:
+//   node scripts/smoke.mjs                  # npm run smoke:staging
+//   node scripts/smoke.mjs --check-env      # only require STAGING_URL, before a deploy
+//   node scripts/smoke.mjs --after-deploy   # as the last step of deploy:staging
 
 import { execSync } from 'node:child_process';
 
@@ -18,6 +21,8 @@ if (!BASE) {
   console.error('STAGING_URL is not set. Add it to .env, e.g. STAGING_URL=https://countmein-staging.<subdomain>.workers.dev');
   process.exit(1);
 }
+if (process.argv.includes('--check-env')) process.exit(0);
+const afterDeploy = process.argv.includes('--after-deploy');
 
 function stagingToken() {
   let out;
@@ -92,6 +97,10 @@ for (const [name, run] of checks) {
   console.log(`${problem ? 'FAIL' : 'ok  '} ${name}${problem ? ` - ${problem}` : ''}`);
 }
 if (failed) {
-  console.error(`${failed} of ${checks.length} checks failed.`);
+  console.error(
+    afterDeploy
+      ? `The deploy itself succeeded, but ${failed} of ${checks.length} smoke checks failed.`
+      : `${failed} of ${checks.length} checks failed.`,
+  );
   process.exit(1);
 }
