@@ -223,7 +223,29 @@ export async function forceRefresh(page: Page): Promise<void> {
 
 const slug = (s: string) => s.replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
 
-export const test = base.extend<{ guard: void }>({
+// Console errors a test may log. Specs go offline and provoke 4xx/5xx answers on
+// purpose, and the browser reports each failed request this way.
+const ALLOWED_CONSOLE_ERRORS: RegExp[] = [/^Failed to load resource: /];
+
+export const test = base.extend<{ guard: void; consoleErrors: void }>({
+  // Every test fails on an uncaught page exception or a console.error in any page
+  // of its context.
+  consoleErrors: [
+    async ({ context }, use) => {
+      const errors: string[] = [];
+      context.on('weberror', (e) => {
+        errors.push(`uncaught ${e.error().stack ?? e.error().message} (${e.page()?.url() ?? 'no page'})`);
+      });
+      context.on('console', (m) => {
+        if (m.type() !== 'error') return;
+        if (ALLOWED_CONSOLE_ERRORS.some((re) => re.test(m.text()))) return;
+        errors.push(`console.error ${m.text()} (${m.page()?.url() ?? m.location().url})`);
+      });
+      await use();
+      expect(errors, 'page errors and console errors').toEqual([]);
+    },
+    { auto: true },
+  ],
   // Every test: Google Maps can never load (it is billable), and in video mode
   // the recording is copied to e2e/videos/<test>.webm.
   guard: [
