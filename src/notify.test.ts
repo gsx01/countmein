@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from './index';
 import type { User } from './db';
-import { copyFor, notifyChange } from './notify';
+import { copyFor, notifyChange, timeAndMeetupUpdates } from './notify';
 import { bytesToB64url, pushToUsers, type PushPayload } from './push';
 
 // Calls through to the real pushToUsers; the wrapper only records each payload,
@@ -170,7 +170,7 @@ describe('notifyChange routing', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(null, { status: 201 }));
 
-    await notifyChange(env, alice, trip, { kind: 'etd', etd: '08:15' });
+    await notifyChange(env, alice, trip, { kind: 'etd', etd: '08:15', meetup: null });
 
     expect(endpointsHit(fetchMock)).toEqual([
       'https://push.test/bob',
@@ -255,7 +255,7 @@ describe('notifyChange routing', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(null, { status: 201 }));
 
-    await notifyChange(env, alice, trip, { kind: 'etd', etd: '08:15' });
+    await notifyChange(env, alice, trip, { kind: 'etd', etd: '08:15', meetup: null });
 
     expect(endpointsHit(fetchMock)).toEqual(['https://push.test/carol']);
   });
@@ -274,7 +274,7 @@ describe('notifyChange routing', () => {
   });
 });
 
-describe('meetup suggestion', () => {
+describe('meetup', () => {
   afterEach(() => vi.restoreAllMocks());
 
   const users = [
@@ -302,7 +302,7 @@ describe('meetup suggestion', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(null, { status: 201 }));
 
-    await notifyChange(env, alice, trip, { kind: 'meetup', label: '@Bob' });
+    await notifyChange(env, alice, trip, { kind: 'meetup', label: '@Bob', etd: '08:00' });
 
     expect(endpointsHit(fetchMock)).toEqual([
       'https://push.test/bob',
@@ -322,22 +322,73 @@ describe('meetup suggestion', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(null, { status: 201 }));
 
-    await notifyChange(env, alice, trip, { kind: 'meetup', label: '@Bob' });
+    await notifyChange(env, alice, trip, { kind: 'meetup', label: '@Bob', etd: '08:00' });
 
     expect(endpointsHit(fetchMock)).toEqual(['https://push.test/carol']);
   });
 
-  it('names the driver and the spot, with the day as body', () => {
-    expect(copyFor(alice, 'Mon 5 Jan 08:00', { kind: 'meetup', label: '@Bob' })).toEqual({
-      title: 'Alice suggests meeting at @Bob',
-      body: 'Mon 5 Jan 08:00',
-    });
+  it('names the spot and the meet time, with the driver as body', () => {
+    expect(
+      copyFor(alice, 'Mon 5 Jan 08:00', { kind: 'meetup', label: '@Bob', etd: '08:15' }),
+    ).toEqual({ title: 'Mon 5 Jan 08:00 - meet at @Bob 08:15', body: 'Alice' });
+  });
+
+  it('says a cleared meetup was cleared', () => {
+    expect(copyFor(alice, 'Mon 5 Jan 08:00', { kind: 'meetup', label: null, etd: '08:00' })).toEqual(
+      { title: 'Mon 5 Jan 08:00 - meetup cleared', body: 'Alice' },
+    );
+  });
+
+  it('reads a new time with a live meetup as the meet time', () => {
+    expect(
+      copyFor(alice, 'Mon 5 Jan 08:00', { kind: 'etd', etd: '08:20', meetup: '@Bob' }),
+    ).toEqual({ title: 'Mon 5 Jan 08:00 - meet at @Bob 08:20', body: 'Alice' });
+  });
+});
+
+describe('timeAndMeetupUpdates', () => {
+  const none = { etd: '08:00', meetup: null };
+  const atBob = { etd: '08:00', meetup: '@Bob' };
+
+  it('is empty when neither changed', () => {
+    expect(timeAndMeetupUpdates(atBob, atBob)).toEqual([]);
+  });
+
+  it('reads a new time without a meetup as the leave time', () => {
+    expect(timeAndMeetupUpdates(none, { ...none, etd: '07:45' })).toEqual([
+      { kind: 'etd', etd: '07:45', meetup: null },
+    ]);
+  });
+
+  it('reads a new time with an unchanged meetup as the meet time', () => {
+    expect(timeAndMeetupUpdates(atBob, { ...atBob, etd: '08:15' })).toEqual([
+      { kind: 'etd', etd: '08:15', meetup: '@Bob' },
+    ]);
+  });
+
+  it('folds a new time into a new meetup', () => {
+    expect(timeAndMeetupUpdates(none, { etd: '08:15', meetup: '@Bob' })).toEqual([
+      { kind: 'meetup', label: '@Bob', etd: '08:15' },
+    ]);
+  });
+
+  it('names the unchanged time with a new meetup', () => {
+    expect(timeAndMeetupUpdates(none, atBob)).toEqual([
+      { kind: 'meetup', label: '@Bob', etd: '08:00' },
+    ]);
+  });
+
+  it('lists a cleared meetup and the new leave time apart', () => {
+    expect(timeAndMeetupUpdates(atBob, { etd: '07:45', meetup: null })).toEqual([
+      { kind: 'meetup', label: null, etd: '07:45' },
+      { kind: 'etd', etd: '07:45', meetup: null },
+    ]);
   });
 });
 
 describe('trip update copy', () => {
   it('reads a lone change exactly as its own push', () => {
-    const etd = { kind: 'etd', etd: '07:45' } as const;
+    const etd = { kind: 'etd', etd: '07:45', meetup: null } as const;
     expect(copyFor(alice, 'Mon 5 Jan 08:00', { kind: 'trip-update', changes: [etd] })).toEqual(
       copyFor(alice, 'Mon 5 Jan 08:00', etd),
     );
@@ -348,14 +399,13 @@ describe('trip update copy', () => {
       copyFor(alice, 'Mon 5 Jan 08:00', {
         kind: 'trip-update',
         changes: [
-          { kind: 'etd', etd: '07:45' },
-          { kind: 'meetup', label: '@Bob' },
+          { kind: 'meetup', label: '@Bob', etd: '07:45' },
           { kind: 'trip-note', note: 'bring snacks' },
         ],
       }),
     ).toEqual({
       title: 'Mon 5 Jan 08:00 - trip updated',
-      body: 'Leaves 07:45 - meet at @Bob - note: bring snacks',
+      body: 'Meet at @Bob 07:45 - note: bring snacks',
     });
   });
 
@@ -365,10 +415,22 @@ describe('trip update copy', () => {
         kind: 'trip-update',
         changes: [
           { kind: 'trip-note', note: null },
-          { kind: 'etd', etd: '07:45' },
+          { kind: 'etd', etd: '07:45', meetup: null },
         ],
       }).body,
     ).toBe('Note cleared - leaves 07:45');
+  });
+
+  it('says a cleared meetup was cleared beside the new leave time', () => {
+    expect(
+      copyFor(alice, 'Mon 5 Jan 08:00', {
+        kind: 'trip-update',
+        changes: [
+          { kind: 'meetup', label: null, etd: '07:45' },
+          { kind: 'etd', etd: '07:45', meetup: null },
+        ],
+      }).body,
+    ).toBe('Meetup cleared - leaves 07:45');
   });
 });
 
@@ -397,7 +459,7 @@ describe('push copy', () => {
     vi.mocked(pushToUsers).mockClear();
     const db = fakeDb({ users: [{ id: 2, token: 't2' }], participation: allPending, subs: [] });
 
-    await notifyChange(await vapidEnv(db), alice, trip, { kind: 'etd', etd: '07:30' });
+    await notifyChange(await vapidEnv(db), alice, trip, { kind: 'etd', etd: '07:30', meetup: null });
 
     const [[, , payload]] = vi.mocked(pushToUsers).mock.calls;
     expect((payload as PushPayload).title).toMatch(/^Mon 7 Sept? 08:00 - ETD now 07:30$/);
@@ -417,7 +479,7 @@ describe('push link', () => {
       subs: [],
     });
 
-    await notifyChange(await vapidEnv(db), alice, trip, { kind: 'etd', etd: '07:30' });
+    await notifyChange(await vapidEnv(db), alice, trip, { kind: 'etd', etd: '07:30', meetup: null });
 
     const urls = vi
       .mocked(pushToUsers)

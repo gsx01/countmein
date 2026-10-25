@@ -5,6 +5,7 @@ import {
   call,
   ENDPOINTS,
   lockedTrip,
+  PENDING,
   pushedTo,
   query,
   RIDER,
@@ -125,11 +126,20 @@ describe('PATCH /api/trips/:id', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it('pushes nothing for a cleared meetup alone', async () => {
+    it('pushes a cleared meetup', async () => {
       await patch('driver', T, { meetup_label: '@Rider' });
       const spy = spyPush();
       await patch('driver', T, { meetup_label: null }, e);
+      expect(pushedTo(spy)).toEqual([ENDPOINTS.pending, ENDPOINTS.rider]);
+    });
+
+    it('pushes nothing when clearing a meetup riders no longer see', async () => {
+      await patch('driver', T, { meetup_label: '@Pending' });
+      await query('UPDATE users SET enabled = 0 WHERE id = ?', PENDING);
+      const spy = spyPush();
+      expect((await patch('driver', T, { meetup_label: null }, e)).status).toBe(200);
       expect(spy).not.toHaveBeenCalled();
+      expect((await tripRow(T))?.meetup_label).toBeNull();
     });
 
     it('pushes a cleared note', async () => {

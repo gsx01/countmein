@@ -4,7 +4,7 @@ import { NOTIFY_CATEGORIES, type Destination } from './types';
 import { clampLeftAt, isLocked, localDateStr } from './time';
 import { addManualTrip, ensureTrips } from './trips';
 import { buildState, getTrip, getUserByToken, isKnownSpot, type User } from './db';
-import { notifyChange, type TripUpdate } from './notify';
+import { notifyChange, timeAndMeetupUpdates } from './notify';
 import {
   backfillParticipation,
   createUser,
@@ -448,9 +448,13 @@ async function participation(
 
 const TRIP_FIELDS = ['etd', 'meetup_label', 'note'];
 
+// The stored meetup if it is still in the live spot list, as riders see it.
+async function liveMeetup(env: Env, label: string | null): Promise<string | null> {
+  return label !== null && (await isKnownSpot(env.DB, label, resolveOffice(env))) ? label : null;
+}
+
 // Any of etd, meetup_label and note. Every field is validated before anything is
 // written; only the changed ones are stored, and they go out as one push.
-// Clearing the meetup is stored but adds nothing to the push.
 async function editTrip(
   request: Request,
   env: Env,
@@ -470,34 +474,32 @@ async function editTrip(
   }
 
   const writes: D1PreparedStatement[] = [];
-  const changes: TripUpdate[] = [];
 
+  let etd = trip.etd;
   if ('etd' in body) {
-    const etd = body.etd;
-    if (typeof etd !== 'string' || !HHMM.test(etd)) throw new ApiError(400, 'etd must be HH:MM');
-    if (etd !== trip.etd) {
-      writes.push(env.DB.prepare('UPDATE trips SET etd = ? WHERE id = ?').bind(etd, tripId));
-      changes.push({ kind: 'etd', etd });
-    }
+    const raw = body.etd;
+    if (typeof raw !== 'string' || !HHMM.test(raw)) throw new ApiError(400, 'etd must be HH:MM');
+    etd = raw;
   }
 
+  const before = await liveMeetup(env, trip.meetup_label);
+  let meetup = before;
   if ('meetup_label' in body) {
     if (trip.status === 'cancelled') throw new ApiError(409, 'trip cancelled');
     const raw = body.meetup_label;
-    let label: string | null = null;
-    if (raw !== null) {
-      if (typeof raw !== 'string' || !(await isKnownSpot(env.DB, raw, resolveOffice(env)))) {
-        throw new ApiError(400, 'meetup_label must be a known spot or null');
-      }
-      label = raw;
-    }
-    if (label !== trip.meetup_label) {
+    if (raw === null) meetup = null;
+    else if (typeof raw === 'string' && (await liveMeetup(env, raw)) !== null) meetup = raw;
+    else throw new ApiError(400, 'meetup_label must be a known spot or null');
+    if (meetup !== trip.meetup_label) {
       writes.push(
-        env.DB.prepare('UPDATE trips SET meetup_label = ? WHERE id = ?').bind(label, tripId),
+        env.DB.prepare('UPDATE trips SET meetup_label = ? WHERE id = ?').bind(meetup, tripId),
       );
-      if (label !== null) changes.push({ kind: 'meetup', label });
     }
   }
+  if (etd !== trip.etd) {
+    writes.push(env.DB.prepare('UPDATE trips SET etd = ? WHERE id = ?').bind(etd, tripId));
+  }
+  const changes = timeAndMeetupUpdates({ etd: trip.etd, meetup: before }, { etd, meetup });
 
   if ('note' in body) {
     const note = parseNote(body);
@@ -534,7 +536,8 @@ async function editEtd(
   await env.DB.prepare('UPDATE trips SET etd = ? WHERE id = ?').bind(etd, tripId).run();
 
   if (trip.etd !== etd) {
-    ctx.waitUntil(notifyChange(env, user, trip, { kind: 'etd', etd }));
+    const meetup = await liveMeetup(env, trip.meetup_label);
+    ctx.waitUntil(notifyChange(env, user, trip, { kind: 'etd', etd, meetup }));
   }
 }
 

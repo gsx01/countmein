@@ -10,11 +10,31 @@ import type { NotifyCategory } from './types';
 import { pushToUsers, type PushPayload } from './push';
 import { localHHMM, tripLabel } from './time';
 
-// The driver's trip settings that one PATCH can change together.
+// The driver's trip settings that one PATCH can change together. Both time and
+// meetup carry the other as it stands after the write: with a meetup the trip's
+// time is when the driver is there, so the two read as one "meet at" line.
 export type TripUpdate =
-  | { kind: 'etd'; etd: string }
-  | { kind: 'meetup'; label: string }
+  | { kind: 'etd'; etd: string; meetup: string | null }
+  | { kind: 'meetup'; label: string | null; etd: string }
   | { kind: 'trip-note'; note: string | null };
+
+interface TimeAndMeetup {
+  etd: string;
+  meetup: string | null;
+}
+
+// The push lines for a write that may move the trip time and the live meetup. A
+// new meetup names the time with it, so a time change alongside it needs no line
+// of its own; a cleared meetup still lists the new leave time.
+export function timeAndMeetupUpdates(before: TimeAndMeetup, after: TimeAndMeetup): TripUpdate[] {
+  const changes: TripUpdate[] = [];
+  const meetupChanged = after.meetup !== before.meetup;
+  if (meetupChanged) changes.push({ kind: 'meetup', label: after.meetup, etd: after.etd });
+  if (after.etd !== before.etd && !(meetupChanged && after.meetup !== null)) {
+    changes.push({ kind: 'etd', etd: after.etd, meetup: after.meetup });
+  }
+  return changes;
+}
 
 export type NotifyAction =
   | TripUpdate
@@ -78,12 +98,14 @@ const preview = (note: string) =>
 // names the tap time instead of claiming the driver leaves now.
 const LATE_LEAVING_MS = 2 * 60_000;
 
+const meetAt = (label: string, etd: string) => `meet at ${label} ${etd}`;
+
 function updateLine(change: TripUpdate): string {
   switch (change.kind) {
     case 'etd':
-      return `leaves ${change.etd}`;
+      return change.meetup ? meetAt(change.meetup, change.etd) : `leaves ${change.etd}`;
     case 'meetup':
-      return `meet at ${change.label}`;
+      return change.label ? meetAt(change.label, change.etd) : 'meetup cleared';
     case 'trip-note':
       return change.note ? `note: ${preview(change.note)}` : 'note cleared';
   }
@@ -97,7 +119,9 @@ export function copyFor(
 ): { title: string; body: string } {
   switch (action.kind) {
     case 'etd':
-      return { title: `${day} - ETD now ${action.etd}`, body: actor.name };
+      return action.meetup
+        ? { title: `${day} - ${meetAt(action.meetup, action.etd)}`, body: actor.name }
+        : { title: `${day} - ETD now ${action.etd}`, body: actor.name };
     // A lone change reads exactly as its own push; several share one line each.
     case 'trip-update': {
       if (action.changes.length === 1) return copyFor(actor, day, action.changes[0], now);
@@ -124,7 +148,9 @@ export function copyFor(
         : { title: 'Driver is leaving now', body: day };
     }
     case 'meetup':
-      return { title: `${actor.name} suggests meeting at ${action.label}`, body: day };
+      return action.label
+        ? { title: `${day} - ${meetAt(action.label, action.etd)}`, body: actor.name }
+        : { title: `${day} - meetup cleared`, body: actor.name };
     case 'participation':
       return action.response === 'in'
         ? { title: `${actor.name} is in`, body: `${day}, pickup ${action.spot}` }
