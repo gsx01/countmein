@@ -20,13 +20,30 @@ if (!BASE) {
 }
 
 function stagingToken() {
-  const out = execSync(
-    'npx wrangler d1 execute countmein-staging --remote --env staging --json --command "SELECT token FROM users WHERE enabled = 1 ORDER BY id LIMIT 1"',
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-  );
+  let out;
+  try {
+    out = execSync(
+      'npx wrangler d1 execute countmein-staging --remote --env staging --json --command "SELECT token FROM users WHERE enabled = 1 ORDER BY id LIMIT 1"',
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  } catch (err) {
+    throw new Error(`reading a token from the staging D1 failed: ${wranglerError(err)}`);
+  }
   const token = JSON.parse(out.slice(out.indexOf('[')))[0].results[0]?.token;
   if (!token) throw new Error('no enabled user in the staging D1');
   return token;
+}
+
+// With --json, wrangler reports a failure as JSON on stdout ({ error: { text,
+// notes } }); it holds no query results, so no token can leak through it.
+function wranglerError(err) {
+  try {
+    const { error } = JSON.parse(err.stdout.slice(err.stdout.indexOf('{')));
+    return [error.text, ...(error.notes ?? []).map((n) => n.text)].join(' ');
+  } catch {
+    const lines = String(err.stderr ?? '').trim().split('\n');
+    return lines.at(-1) || `wrangler exited ${err.status}`;
+  }
 }
 
 const checks = [
