@@ -19,17 +19,22 @@ Changes flow one way: commit on `develop`, then fast-forward `develop -> staging
 or `main`. `npm run deploy` (prod) is blocked for the agent - ask the user to run
 `! npm run deploy`. The agent CAN run `deploy:staging` and `migrate:staging`.
 
-Before every deploy, check the target D1 for pending migrations
-(`npx wrangler d1 migrations list countmein --remote`, or `countmein-staging
---remote --env staging`) and migrate first if any are listed. An environment can
-lag several plans behind `develop`, so "this change adds no migration" is not
-enough: deploying code ahead of its schema 500s every `GET /api/state`. Prod
-migrations are user-run too (`! npm run migrate`).
+An environment can lag several plans behind `develop`, and deploying code ahead
+of its schema 500s every `GET /api/state`, so both deploy scripts guard it:
+
+- `npm run deploy` first runs `scripts/check-migrations.mjs` against the prod D1
+  and refuses to build or deploy while anything is pending, or when the check
+  itself fails (unknown is not clean). Prod migrations stay user-run
+  (`! npm run migrate`); nothing applies one implicitly.
+- `npm run deploy:staging` runs `migrate:staging` first (a no-op when nothing is
+  pending; without a TTY wrangler's confirm answers yes), then builds and
+  deploys, then runs `npm run smoke:staging` against the deployed Worker.
 
 ## Layout
 
 - `src/index.ts` - Worker entry: `fetch` (routes `/api/*`, else static assets)
-  and `scheduled` (cron -> `handleScheduled`).
+  and `scheduled` (cron -> `handleScheduled(env, now)`, `now` being the
+  controller's `scheduledTime`, so a late tick still gates on its own hour).
 - `src/api.ts` - token auth (`?t=` or `x-token`), routing, validation, lock
   rules. Every successful write returns the full `GET /api/state` payload except
   the push routes (204) and `/api/users` (which return `{ state, users }`).
@@ -49,14 +54,34 @@ migrations are user-run too (`! npm run migrate`).
   `favicon.png`). `maps.ts` lazily loads the Google Maps SDK; `route.ts` computes
   the ETA and pin order.
 - `migrations/` (`0001_init.sql` .. `0016_multi_trip_day.sql`), `scripts/seed.mjs`,
-  `scripts/gen-vapid.mjs`.
+  `scripts/gen-vapid.mjs`, `scripts/check-migrations.mjs` (exit 0 only on "No
+  migrations to apply"), `scripts/smoke.mjs` (staging smoke check).
 - Unit tests sit next to the code (`src/*.test.ts`, `web/*.test.ts`: node, fake
   DB). `test/api/` holds the API integration tests: `handleApi` called directly
   inside workerd (`@cloudflare/vitest-plugin`) on a real D1 with every migration,
   reset before each test (`setup.ts`); fixtures and the push spy in `helpers.ts`.
+  `cron.test.ts` drives the real `scheduled` export at pinned UTC instants in
+  both DST seasons. `test/push-decrypt.ts` decrypts an aes128gcm push with the
+  RFC 8291 user-agent keys (`RFC8291_UA`), independent of `src/push.ts`; its test
+  runs in the unit project (`test/*.test.ts`).
 - `e2e/` holds the Playwright suite (`*.spec.ts`, `fixtures.ts`) and its own
-  Worker config `wrangler.e2e.toml` (office `@TestOffice`, no secrets, no Maps
-  key). E2E runs only locally, never against staging or production.
+  Worker config `wrangler.e2e.toml` (office `@TestOffice`, no Maps key). E2E runs
+  only locally, never against staging or production.
+  - Every test fails on an uncaught page exception or a `console.error` in any
+    page of its context; only "Failed to load resource" (the browser's line for
+    a failed request) is allowed, in `ALLOWED_CONSOLE_ERRORS`.
+  - `e2e/env.ts` makes a VAPID pair per run (kept in `process.env.E2E_VAPID` so
+    Playwright workers share it, never written to disk); the config passes it to
+    `wrangler dev` with `--var`, so the e2e Worker really signs and sends.
+  - `e2e/push-service.ts` is a fake push service on port 8789 (worker-scoped
+    `pushService` fixture): it checks the encoding, TTL and VAPID JWT, then
+    decrypts and records each payload. `reset({ subscriptions })` points users
+    at `http://127.0.0.1:8789/<who>` with the RFC keys. `push.spec.ts` hands a
+    received payload to the real `sw.js` via CDP and runs on the full
+    `chromium` channel (the default headless shell denies notifications).
+  - Time-based client behavior (leave backoff, resume throttle and poll) runs on
+    `page.clock`. With a paused clock, `runFor` a frame before timing anything:
+    Preact runs effects after paint.
 
 ## Key invariants
 
@@ -166,8 +191,10 @@ migrations are user-run too (`! npm run migrate`).
 - Resume and offline (client only):
   - `resume.ts` refetches silently (no `loading`, so open maps and drafts stay
     mounted) on `visibilitychange` -> visible, `pageshow` persisted, `online`,
-    and every 60s while visible, all behind one 10s throttle. A failed fetch
-    never consumes the throttle. Route points are keyed on content (`routeKey`)
+    and every 60s while visible, all behind one 10s throttle. Triggers that fire
+    while a refresh runs join it (the throttle is stamped only after the leave
+    flush), so a burst costs one fetch. A failed fetch never consumes the
+    throttle. Route points are keyed on content (`routeKey`)
     so an unchanged refresh doesn't redraw markers.
   - `state-cache.ts` keeps the last good state in `localStorage`, keyed to the
     token. When a fetch fails with a network error the app shows that state with
@@ -209,8 +236,9 @@ migrations are user-run too (`! npm run migrate`).
   its own D1 in `e2e/.state`; it first runs `vite build --mode e2e` (which
   overwrites `dist/client`) and the local migrations. Each test resets the data
   with `wrangler d1 execute --local`. `npm run e2e:video` records one video per
-  test into `e2e/videos/`. One-time setup: `npx playwright install chromium`. If
-  the bundled Chromium won't start (Windows N), set `PW_CHANNEL=chrome-dev`.
+  test into `e2e/videos/`. One-time setup: `npx playwright install chromium`
+  (installs the headless shell and the full build `push.spec.ts` uses). If the
+  bundled Chromium won't start (Windows N), set `PW_CHANNEL=chrome-dev`.
 - `npx wrangler d1 migrations apply countmein --local` then `npm run seed`.
 - `node scripts/gen-vapid.mjs` prints a VAPID pair (see the script for wiring).
 - Cron locally: `npx wrangler dev --test-scheduled`, then
@@ -225,6 +253,10 @@ top-up on `GET /api/state` covers trip creation). Deployed from `staging`.
 - `routes` and `triggers` ARE inherited by named environments, so staging clears
   both (`routes = []`, empty `crons`) - never remove those two lines.
 - `npm run deploy:staging`, `npm run migrate:staging`, `npm run seed:staging`.
+- `npm run smoke:staging` checks the Worker at `STAGING_URL` (from `.env`): `/`,
+  `/sw.js`, the manifest, `/api/state` 401 without a token and 200 with trips
+  for the first enabled user's token (read from the staging D1, never printed).
+  Read-only, so the agent may run it.
 - Staging has its OWN VAPID keypair and secrets, set per env with
   `npx wrangler secret put ... --env staging`.
 
