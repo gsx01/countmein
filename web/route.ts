@@ -31,11 +31,16 @@ export interface RoutePoints {
   driver: RoutePoint | null;
   pickups: RoutePoint[];
   destination: RoutePoint | null;
+  // The trip has a meetup: it is the only pickup (when it has coordinates) and
+  // the trip's time is when the driver is there, not when they leave home.
+  meetup: boolean;
 }
 
 // The map/route inputs for a trip: the driver's home (start), each distinct "in"
 // rider's chosen pickup spot (the home of whoever owns that label), and the
-// destination. Points whose coordinates are not set yet are dropped.
+// destination. A meetup is the one stop, even before anyone is in, since the
+// trip's time is anchored there. Points whose coordinates are not set yet are
+// dropped.
 export function routePoints(trip: Trip, spots: PickupSpot[]): RoutePoints {
   const d = trip.driver;
   const driver =
@@ -43,15 +48,17 @@ export function routePoints(trip: Trip, spots: PickupSpot[]): RoutePoints {
       ? { label: d.name, lat: d.lat, lng: d.lng, emoji: d.emoji }
       : null;
 
+  // Truthy check: a state cached before the meetup feature has no such field.
+  const meetup = trip.meetup_label || null;
+  const labels = meetup
+    ? [meetup]
+    : trip.riders.flatMap((r) => (r.response === 'in' && r.pickup_spot ? [r.pickup_spot] : []));
   const byLabel = new Map(spots.map((s) => [s.label, s]));
-  const seen = new Set<string>();
   const pickups: RoutePoint[] = [];
-  for (const r of trip.riders) {
-    if (r.response !== 'in' || !r.pickup_spot || seen.has(r.pickup_spot)) continue;
-    const s = byLabel.get(r.pickup_spot);
+  for (const label of new Set(labels)) {
+    const s = byLabel.get(label);
     if (s && s.lat !== null && s.lng !== null) {
-      seen.add(r.pickup_spot);
-      pickups.push({ label: r.pickup_spot, lat: s.lat, lng: s.lng, emoji: s.emoji });
+      pickups.push({ label, lat: s.lat, lng: s.lng, emoji: s.emoji });
     }
   }
 
@@ -66,11 +73,13 @@ export function routePoints(trip: Trip, spots: PickupSpot[]): RoutePoints {
   // against, so the rider-response order stands.
   const ordered = driver && destination ? orderStops(driver, pickups, destination) : pickups;
 
-  return { driver, pickups: ordered, destination };
+  return { driver, pickups: ordered, destination, meetup: meetup !== null };
 }
 
-// The trip's departure as a local Date (browser time - fine for NL colleagues),
-// or null if unparseable. Passed to Directions for traffic-aware timing.
+// The trip's time as a local Date (browser time - fine for NL colleagues), or
+// null if unparseable. Passed to Directions for traffic-aware timing. With a
+// meetup this is the meet time, so the drive there is sampled a little late; one
+// Directions call is worth more than that accuracy on a commute.
 export function departureAt(trip: Trip): Date | null {
   const [y, mo, d] = trip.trip_date.split('-').map(Number);
   const [h, mi] = trip.etd.split(':').map(Number);
@@ -102,7 +111,7 @@ function etaSignature(p: RoutePoints, departure: Date | null): string {
 // keys mean a refetched state can keep the previous `points`, so the map's marker
 // and ETA effects don't re-run.
 export function routeKey(p: RoutePoints, trip: Pick<Trip, 'trip_date' | 'etd'>): string {
-  return `${pointsSignature(p, pinOf)}|${trip.trip_date}|${trip.etd}`;
+  return `${pointsSignature(p, pinOf)}|${p.meetup}|${trip.trip_date}|${trip.etd}`;
 }
 
 // Directions rejects a past departureTime, so traffic-aware timing is used only
@@ -151,10 +160,31 @@ export function fmtDuration(seconds: number): string {
   return m ? `${h} h ${m} min` : `${h} h`;
 }
 
-// A clock time: the ETD plus the given drive seconds (same-day, wraps at
-// midnight). Used for the driver's arrival and each rider's pickup time.
+// A clock time: the ETD plus the given drive seconds, which may be negative
+// (same-day, wraps at midnight both ways).
 export function addSeconds(etd: string, seconds: number): string {
   const [h, m] = etd.split(':').map(Number);
-  const total = (h * 60 + m + Math.round(seconds / 60)) % (24 * 60);
+  const day = 24 * 60;
+  const total = (((h * 60 + m + Math.round(seconds / 60)) % day) + day) % day;
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+export interface RouteTimes {
+  leave: string;
+  stops: { label: string; at: string }[];
+  arrive: string;
+}
+
+// Clock times along the route, counted from where the trip's time applies: the
+// meetup stop when there is one, else the driver's home. Null when the meetup has
+// no coordinates, as nothing on the route can then be timed.
+export function routeTimes(etd: string, meetup: boolean, route: RouteResult): RouteTimes | null {
+  const anchor = meetup ? route.stops[0]?.cumulativeSeconds : 0;
+  if (anchor === undefined) return null;
+  const at = (seconds: number) => addSeconds(etd, seconds - anchor);
+  return {
+    leave: at(0),
+    stops: route.stops.map((s) => ({ label: s.label, at: at(s.cumulativeSeconds) })),
+    arrive: at(route.totalSeconds),
+  };
 }

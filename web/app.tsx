@@ -36,12 +36,12 @@ import { GOOGLE_MAPS_MAP_ID } from './config';
 import { leaveOpen } from './leave-window';
 import { mapsLibrary, markerLibrary, navigateUrl, placesLibrary, type PickedPlace } from './maps';
 import {
-  addSeconds,
   computeEta,
   departureAt,
   fmtDuration,
   routeKey,
   routePoints,
+  routeTimes,
   type RoutePoints,
   type RouteResult,
 } from './route';
@@ -1620,6 +1620,7 @@ function TripRoute({ trip, spots }: { trip: Trip; spots: PickupSpot[] }) {
     };
   }, [shown, points, trip.trip_date, trip.etd]);
 
+  const times = eta && routeTimes(trip.etd, points.meetup, eta);
   const nav =
     points.driver && points.destination
       ? navigateUrl(points.driver, points.pickups, points.destination)
@@ -1647,17 +1648,25 @@ function TripRoute({ trip, spots }: { trip: Trip; spots: PickupSpot[] }) {
           {eta && (
             <div class="route-eta">
               <div class="route-total">
-                Drive ~{fmtDuration(eta.totalSeconds)}, arrive ~{addSeconds(trip.etd, eta.totalSeconds)}
+                Drive ~{fmtDuration(eta.totalSeconds)}
+                {times && `, arrive ~${times.arrive}`}
                 {eta.traffic ? '' : <span class="muted"> (typical, no traffic)</span>}
               </div>
-              {eta.stops.length > 0 && (
-                <ul class="route-stops">
-                  {eta.stops.map((s) => (
-                    <li key={s.label}>
-                      {s.label} - pickup ~{addSeconds(trip.etd, s.cumulativeSeconds)}
-                    </li>
-                  ))}
-                </ul>
+              {times ? (
+                (points.meetup || times.stops.length > 0) && (
+                  <ul class="route-stops">
+                    {points.meetup && <li>Driver leaves home ~{times.leave}</li>}
+                    {times.stops.map((s) => (
+                      <li key={s.label}>
+                        {points.meetup ? `${s.label} - meet ${s.at}` : `${s.label} - pickup ~${s.at}`}
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : (
+                <p class="route-hint muted">
+                  Set the address for {trip.meetup_label} (Manage users) to see times.
+                </p>
               )}
             </div>
           )}
