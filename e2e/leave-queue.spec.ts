@@ -62,6 +62,35 @@ test('a tap the API never got lands on the 15s backoff', async ({ page }) => {
   expect(await queued(page)).toEqual([]);
 });
 
+test('a send that hangs gives up after 15s and is retried', async ({ page }) => {
+  const send = `**/api/trips/${TODAY}/leaving`;
+  const failed = () =>
+    page.waitForEvent('requestfailed', {
+      predicate: (r) => r.url().includes(`/api/trips/${TODAY}/leaving`),
+      timeout: 5_000,
+    });
+  await page.clock.install();
+  await as(page, 'driver', TODAY);
+  await page.clock.pauseAt(Date.now() + 1_000);
+  await page.route(send, () => {});
+  await Promise.all([
+    page.waitForRequest((r) => r.url().includes(`/api/trips/${TODAY}/leaving`)),
+    leaving(page).click(),
+  ]);
+  const [entry] = await queued(page);
+
+  await page.clock.fastForward(14_000);
+  await page.waitForTimeout(500);
+  await expect(leaving(page)).toHaveText(/^Left \d\d:\d\d - sending\.\.\.$/);
+
+  await Promise.all([failed(), page.clock.fastForward(1_000)]);
+  await page.unroute(send);
+  await page.clock.runFor(500);
+  await page.clock.fastForward(15_000);
+  await expect.poll(() => leftAt(TODAY)).toBe(entry.leftAt);
+  await expect(leaving(page)).toHaveText(/^Left \d\d:\d\d$/);
+});
+
 test('a tap made before closing the app is sent when it reopens', async ({ page }) => {
   await as(page, 'driver', TODAY);
   const entry = await tapUnreachable(page);

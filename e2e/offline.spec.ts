@@ -52,3 +52,30 @@ test('the offline banner and Retry follow the API', async ({ page }) => {
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
   await expect(page.locator('.banner')).toHaveCount(0);
 });
+
+test('a refresh that hangs gives up after 15s and shows offline', async ({ page }) => {
+  const state = '**/api/state';
+  const offline = page.locator('.banner span').filter({ hasText: /^Offline - data from/ });
+  await page.clock.install();
+  await page.goto(`/?t=${USERS.rider.token}`);
+  await expect(card(page, T)).toBeVisible();
+
+  await page.route(state, () => {});
+  await page.clock.fastForward(10_500);
+  await Promise.all([
+    page.waitForRequest((r) => new URL(r.url()).pathname === '/api/state'),
+    page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))),
+  ]);
+  await page.clock.fastForward(14_000);
+  await page.waitForTimeout(500);
+  await expect(offline).toHaveCount(0);
+
+  await page.clock.fastForward(1_000);
+  await expect(offline).toBeVisible();
+  await expect(card(page, T)).toBeVisible();
+
+  // The timed-out refresh no longer holds the next one back.
+  await page.unroute(state);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(page.locator('.banner')).toHaveCount(0);
+});
