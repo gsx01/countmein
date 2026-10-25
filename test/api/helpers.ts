@@ -83,6 +83,7 @@ export async function query<T = Record<string, unknown>>(
 export interface CallResult<T = any> {
   status: number;
   json: T;
+  headers: Headers;
 }
 
 // Runs handleApi directly (not SELF.fetch) so any ctx.waitUntil push has
@@ -107,7 +108,7 @@ export async function call<T = any>(
   const res = await handleApi(request, e, ctx);
   await waitOnExecutionContext(ctx);
   const text = await res.text();
-  return { status: res.status, json: text === '' ? null : JSON.parse(text) };
+  return { status: res.status, json: text === '' ? null : JSON.parse(text), headers: res.headers };
 }
 
 export function tripIn(state: AppState, tripId: number): Trip {
