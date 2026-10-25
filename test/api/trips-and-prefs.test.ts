@@ -114,11 +114,11 @@ describe('PATCH /api/prefs', () => {
 
 describe('POST /api/push/subscribe and unsubscribe', () => {
   const FCM = 'https://fcm.googleapis.com/fcm/send/a';
-  const sub = (token: string, endpoint: string, p256dh = 'key-1') =>
-    call(token, 'POST', '/api/push/subscribe', { endpoint, keys: { p256dh, auth: 'auth-1' } });
+  const sub = (token: string, endpoint: string, p256dh = 'key-1', auth = 'auth-1') =>
+    call(token, 'POST', '/api/push/subscribe', { endpoint, keys: { p256dh, auth } });
   const owner = (endpoint: string) =>
-    query<{ user_id: number; p256dh: string }>(
-      'SELECT user_id, p256dh FROM push_subscriptions WHERE endpoint = ?',
+    query<{ user_id: number; p256dh: string; auth: string }>(
+      'SELECT user_id, p256dh, auth FROM push_subscriptions WHERE endpoint = ?',
       endpoint,
     );
   const count = async () =>
@@ -128,14 +128,26 @@ describe('POST /api/push/subscribe and unsubscribe', () => {
     const res = await sub(TOKENS.rider, FCM);
     expect(res.status).toBe(204);
     expect(res.json).toBeNull();
-    expect(await owner(FCM)).toEqual({ user_id: RIDER, p256dh: 'key-1' });
+    expect(await owner(FCM)).toEqual({ user_id: RIDER, p256dh: 'key-1', auth: 'auth-1' });
   });
 
-  it('reassigns the owner and keys on re-subscribe', async () => {
+  it('reassigns the owner when the same device re-subscribes for another user', async () => {
     await sub(TOKENS.rider, FCM);
     expect((await sub(TOKENS.driver, FCM, 'key-2')).status).toBe(204);
-    expect(await owner(FCM)).toEqual({ user_id: DRIVER, p256dh: 'key-2' });
+    expect(await owner(FCM)).toEqual({ user_id: DRIVER, p256dh: 'key-2', auth: 'auth-1' });
     expect(await count()).toBe(1);
+  });
+
+  it("refreshes the owner's own keys", async () => {
+    await sub(TOKENS.rider, FCM);
+    expect((await sub(TOKENS.rider, FCM, 'key-2', 'auth-2')).status).toBe(204);
+    expect(await owner(FCM)).toEqual({ user_id: RIDER, p256dh: 'key-2', auth: 'auth-2' });
+  });
+
+  it("leaves another user's endpoint alone without its auth secret", async () => {
+    await sub(TOKENS.rider, FCM);
+    expect((await sub(TOKENS.driver, FCM, 'key-x', 'auth-x')).status).toBe(204);
+    expect(await owner(FCM)).toEqual({ user_id: RIDER, p256dh: 'key-1', auth: 'auth-1' });
   });
 
   it.each([

@@ -839,13 +839,17 @@ async function subscribePush(request: Request, env: Env, user: User): Promise<vo
 
   // Upsert on the unique endpoint: a re-subscribe (key rotation, or the same
   // device now used by a different user) refreshes keys and reassigns the owner.
+  // Another user may take the row over only by presenting its auth secret, which
+  // the device holds but the endpoint URL alone doesn't reveal.
   await env.DB.prepare(
     `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at)
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(endpoint) DO UPDATE SET
          user_id = excluded.user_id,
          p256dh = excluded.p256dh,
-         auth = excluded.auth`,
+         auth = excluded.auth
+       WHERE push_subscriptions.user_id = excluded.user_id
+          OR push_subscriptions.auth = excluded.auth`,
   )
     .bind(user.id, endpoint, p256dh, auth, new Date().toISOString())
     .run();
