@@ -87,7 +87,9 @@ migrations are user-run too (`! npm run migrate`).
   list - the enabled users' `pickup_label`s plus the office) or `out`, never back
   to `pending`. The office label (`OFFICE_DESTINATION.label`) is reserved.
 - Driver is PER-TRIP (`trips.driver_id`, nullable), not a global role. Any enabled
-  user can drive and ANYONE can (re)assign via `POST /api/trips/:id/driver`. Every
+  user can drive and ANYONE can take the role (or clear it) via `POST
+  /api/trips/:id/driver`, but only for themselves: a `driver_id` other than the
+  caller's own id (or null) is 403. Every
   enabled user has a participation row on every trip; the driver's row is hidden
   (the driver is implicitly `in`). New trips (auto and manual) start with no
   driver; someone takes one via the driver route. Auth for ETD /
