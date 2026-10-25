@@ -3,7 +3,7 @@ import { resolveOffice } from './config';
 import { NOTIFY_CATEGORIES, type Destination } from './types';
 import { clampLeftAt, isLocked, localDateStr } from './time';
 import { addManualTrip, ensureTrips } from './trips';
-import { buildState, getTrip, getUserByToken, isKnownSpot, type User } from './db';
+import { buildState, getTrip, getUserByToken, isKnownSpot, liveMeetup, type User } from './db';
 import { notifyChange, timeAndMeetupUpdates } from './notify';
 import {
   backfillParticipation,
@@ -448,11 +448,6 @@ async function participation(
 
 const TRIP_FIELDS = ['etd', 'meetup_label', 'note'];
 
-// The stored meetup if it is still in the live spot list, as riders see it.
-async function liveMeetup(env: Env, label: string | null): Promise<string | null> {
-  return label !== null && (await isKnownSpot(env.DB, label, resolveOffice(env))) ? label : null;
-}
-
 // Any of etd, meetup_label and note. Every field is validated before anything is
 // written; only the changed ones are stored, and they go out as one push.
 async function editTrip(
@@ -482,13 +477,14 @@ async function editTrip(
     etd = raw;
   }
 
-  const before = await liveMeetup(env, trip.meetup_label);
+  const office = resolveOffice(env);
+  const before = await liveMeetup(env.DB, trip.meetup_label, office);
   let meetup = before;
   if ('meetup_label' in body) {
     if (trip.status === 'cancelled') throw new ApiError(409, 'trip cancelled');
     const raw = body.meetup_label;
     if (raw === null) meetup = null;
-    else if (typeof raw === 'string' && (await liveMeetup(env, raw)) !== null) meetup = raw;
+    else if (typeof raw === 'string' && (await isKnownSpot(env.DB, raw, office))) meetup = raw;
     else throw new ApiError(400, 'meetup_label must be a known spot or null');
     if (meetup !== trip.meetup_label) {
       writes.push(
@@ -536,7 +532,7 @@ async function editEtd(
   await env.DB.prepare('UPDATE trips SET etd = ? WHERE id = ?').bind(etd, tripId).run();
 
   if (trip.etd !== etd) {
-    const meetup = await liveMeetup(env, trip.meetup_label);
+    const meetup = await liveMeetup(env.DB, trip.meetup_label, resolveOffice(env));
     ctx.waitUntil(notifyChange(env, user, trip, { kind: 'etd', etd, meetup }));
   }
 }

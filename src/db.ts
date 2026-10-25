@@ -119,6 +119,15 @@ export async function isKnownSpot(db: D1Database, spot: string, office: Destinat
   return row !== null;
 }
 
+// The stored meetup if it is still in the live spot list, as riders see it.
+export async function liveMeetup(
+  db: D1Database,
+  label: string | null,
+  office: Destination,
+): Promise<string | null> {
+  return label !== null && (await isKnownSpot(db, label, office)) ? label : null;
+}
+
 export async function getTrip(db: D1Database, id: number): Promise<TripRow | null> {
   return db
     .prepare(`SELECT ${TRIP_COLUMNS} FROM trips WHERE id = ?`)

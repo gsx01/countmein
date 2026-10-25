@@ -11,7 +11,7 @@
 
 import type { Env } from './index';
 import { resolveOffice } from './config';
-import { isKnownSpot } from './db';
+import { liveMeetup } from './db';
 import { localDatePlus, tripLabel } from './time';
 import { pushToUsers, type PushPayload } from './push';
 
@@ -96,10 +96,9 @@ async function remindTrip(env: Env, trip: EligibleTrip): Promise<void> {
   if (recipients.length === 0) return;
 
   // With a live meetup the trip time is when the driver is there, so name both.
-  const live =
-    trip.meetup_label !== null && (await isKnownSpot(env.DB, trip.meetup_label, resolveOffice(env)));
+  const meetup = await liveMeetup(env.DB, trip.meetup_label, resolveOffice(env));
   const label = tripLabel(trip.trip_date, trip.etd);
-  const day = live ? `${label} at ${trip.meetup_label}` : label;
+  const day = meetup ? `${label} at ${meetup}` : label;
   await Promise.all(
     recipients.map((r) => {
       const { title, body } = copyFor(r.kind, day);
