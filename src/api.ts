@@ -42,6 +42,13 @@ const json = (data: unknown, status = 200) =>
 const noContent = () => new Response(null, { status: 204, headers: SECURITY_HEADERS });
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Digits only, so 1e0, 0x1, 1.0 and 01 aren't accepted as aliases of id 1.
+function parseId(raw: string, message: string): number {
+  const id = Number(raw);
+  if (!/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(id)) throw new ApiError(400, message);
+  return id;
+}
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function tokenFrom(request: Request, url: URL): string | null {
@@ -160,16 +167,14 @@ export async function handleApi(
         return json(await adminWrite(env, user, now));
       }
       if (parts.length === 3) {
-        const id = Number(parts[2]);
-        if (!Number.isInteger(id)) throw new ApiError(400, 'invalid user id');
+        const id = parseId(parts[2], 'invalid user id');
         if (method === 'PATCH') {
           await patchUserHandler(request, env, id, now);
           return json(await adminWrite(env, user, now));
         }
       }
       if (parts.length === 4 && parts[3] === 'rotate-token' && method === 'POST') {
-        const id = Number(parts[2]);
-        if (!Number.isInteger(id)) throw new ApiError(400, 'invalid user id');
+        const id = parseId(parts[2], 'invalid user id');
         await requireUser(env.DB, id);
         await rotateToken(env.DB, id);
         return json(await adminWrite(env, user, now));
@@ -178,16 +183,14 @@ export async function handleApi(
 
     // PATCH /api/trips/:id - the driver's trip settings in one write.
     if (method === 'PATCH' && parts.length === 3 && parts[1] === 'trips') {
-      const id = Number(parts[2]);
-      if (!Number.isInteger(id)) throw new ApiError(400, 'invalid trip id');
+      const id = parseId(parts[2], 'invalid trip id');
       await editTrip(request, env, ctx, user, id, now);
       return json(await buildState(env.DB, user, now, office));
     }
 
     // POST /api/trips/:id/<action>
     if (parts.length === 4 && parts[1] === 'trips' && method === 'POST') {
-      const id = Number(parts[2]);
-      if (!Number.isInteger(id)) throw new ApiError(400, 'invalid trip id');
+      const id = parseId(parts[2], 'invalid trip id');
       // Own-property only: a plain object would also resolve inherited keys like
       // 'toString'/'__proto__', so an unknown action must not reach a handler.
       const action = parts[3];

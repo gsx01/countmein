@@ -153,6 +153,11 @@ describe('PATCH /api/users/:id', () => {
     expect((await admin('PATCH', '/api/users/99', { name: 'X' })).status).toBe(404);
     expect((await admin('PATCH', '/api/users/abc', { name: 'X' })).status).toBe(400);
   });
+
+  it.each(['2e0', '0x2', '2.0', '02'])('rejects the id alias %s with 400', async (alias) => {
+    expect((await admin('PATCH', `/api/users/${alias}`, { name: 'X' })).status).toBe(400);
+    expect((await admin('POST', `/api/users/${alias}/rotate-token`)).status).toBe(400);
+  });
 });
 
 describe('POST /api/users/:id/rotate-token', () => {

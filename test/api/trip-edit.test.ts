@@ -98,6 +98,18 @@ describe('PATCH /api/trips/:id', () => {
     );
   });
 
+  it.each([
+    ['an exponent', (id: number) => `${id}e0`],
+    ['hex', (id: number) => `0x${id.toString(16)}`],
+    ['a decimal point', (id: number) => `${id}.0`],
+    ['a leading zero', (id: number) => `0${id}`],
+  ])('rejects an id alias with %s with 400', async (_name, alias) => {
+    const res = await call(TOKENS.driver, 'PATCH', `/api/trips/${alias(T)}`, { etd: '07:30' });
+    expect(res.status).toBe(400);
+    const post = await call(TOKENS.driver, 'POST', `/api/trips/${alias(T)}/cancel`);
+    expect(post.status).toBe(400);
+  });
+
   describe('push', () => {
     let e: Env;
     beforeEach(async () => {
