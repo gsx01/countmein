@@ -100,9 +100,20 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+// The server only ever sends a relative /?t=...#trip-... link; anything that
+// resolves off-site opens the app root instead.
+function sameOriginUrl(raw) {
+  try {
+    const target = new URL(raw, self.location.origin);
+    return target.origin === self.location.origin ? target.href : '/';
+  } catch (_e) {
+    return '/';
+  }
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
+  const url = sameOriginUrl((event.notification.data && event.notification.data.url) || '/');
   event.waitUntil(
     (async () => {
       const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
