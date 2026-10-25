@@ -62,7 +62,6 @@ export interface ScenarioRider {
   who: Who;
   response: RiderResponse;
   spot?: string | null;
-  declined?: boolean;
 }
 
 export interface Scenario {
@@ -104,7 +103,7 @@ export function reset(scenario: Scenario): void {
   );
   for (const r of scenario.riders ?? []) {
     lines.push(
-      `UPDATE participation SET response = ${sql(r.response)}, pickup_spot = ${sql(r.spot)}, meetup_declined = ${r.declined ? 1 : 0} WHERE trip_id = ${r.trip} AND user_id = ${USERS[r.who].id};`,
+      `UPDATE participation SET response = ${sql(r.response)}, pickup_spot = ${sql(r.spot)} WHERE trip_id = ${r.trip} AND user_id = ${USERS[r.who].id};`,
     );
   }
   for (const who of scenario.disabled ?? []) {

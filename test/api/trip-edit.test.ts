@@ -5,7 +5,6 @@ import {
   call,
   ENDPOINTS,
   lockedTrip,
-  OFFICE,
   pushedTo,
   query,
   RIDER,
@@ -29,14 +28,6 @@ const tripRow = (id: number) =>
     'SELECT etd, note, meetup_label FROM trips WHERE id = ?',
     id,
   );
-
-const declined = async (tripId: number) =>
-  (
-    await query<{ d: string }>(
-      'SELECT group_concat(meetup_declined) AS d FROM (SELECT meetup_declined FROM participation WHERE trip_id = ? ORDER BY user_id)',
-      tripId,
-    )
-  )?.d;
 
 let T: number;
 
@@ -104,21 +95,6 @@ describe('PATCH /api/trips/:id', () => {
     expect((await call(TOKENS.driver, 'PATCH', '/api/trips/abc', { etd: '07:30' })).status).toBe(
       400,
     );
-  });
-
-  it('keeps declines when the same meetup is sent again', async () => {
-    await patch('driver', T, { meetup_label: '@Rider' });
-    await query('UPDATE participation SET meetup_declined = 1 WHERE trip_id = ?', T);
-    await patch('driver', T, { meetup_label: '@Rider', etd: '07:30' });
-    expect(await declined(T)).toBe('1,1,1');
-  });
-
-  it('resets every decline when the meetup changes', async () => {
-    await patch('driver', T, { meetup_label: '@Rider' });
-    await query('UPDATE participation SET meetup_declined = 1 WHERE trip_id = ?', T);
-    const res = await patch('driver', T, { meetup_label: OFFICE });
-    expect(tripIn(res.json, T).riders.map((r) => r.meetup_declined)).toEqual([false, false]);
-    expect(await declined(T)).toBe('0,0,0');
   });
 
   describe('push', () => {

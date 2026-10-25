@@ -12,7 +12,6 @@ import {
   ApiError,
   createTrip,
   createUser,
-  declineMeetup,
   getState,
   getToken,
   getUsers,
@@ -970,8 +969,6 @@ function TripCard({
   // Offline a write can't land, so the card behaves as if locked. "I'm leaving"
   // is the exception: it is gated by neither.
   const readOnly = trip.locked || offline;
-  // Truthy check: a state cached before the meetup feature has no such field.
-  const meetup = !cancelled && trip.meetup_label ? trip.meetup_label : null;
   return (
     <section
       class={`card${cancelled ? ' cancelled' : ''}`}
@@ -1036,15 +1033,6 @@ function TripCard({
                       ? 'not coming'
                       : 'no reply'}
                 </span>
-                {iAmDriver && meetup && r.response === 'in' && (
-                  <span class="meetup-status">
-                    {r.pickup_spot === meetup
-                      ? `meeting at ${meetup}`
-                      : r.meetup_declined
-                        ? `keeps ${r.pickup_spot}`
-                        : 'no answer'}
-                  </span>
-                )}
                 {suggestion && (
                   <span class="suggestion">
                     suggests {suggestion}
@@ -1072,10 +1060,6 @@ function TripCard({
 
       {!cancelled && <TripRoute trip={trip} spots={spots} />}
 
-      {meetup && !iAmDriver && (
-        <MeetupPrompt trip={trip} me={me} label={meetup} readOnly={readOnly} apply={apply} />
-      )}
-
       {!readOnly && !iAmDriver && !cancelled && (
         <RiderControls trip={trip} me={me} spots={spots} apply={apply} />
       )}
@@ -1086,77 +1070,13 @@ function TripCard({
   );
 }
 
-// The driver's meetup suggestion as the current rider sees it. Accepting is the
-// ordinary "in at that spot" write, so the driver gets the usual response push. A
-// rider who is not in gets the text only; their pickup select is preselected
-// instead. The buttons follow the card's read-only rule; the text does not.
-function MeetupPrompt({
-  trip,
-  me,
-  label,
-  readOnly,
-  apply,
-}: {
-  trip: Trip;
-  me: AppState['me'];
-  label: string;
-  readOnly: boolean;
-  apply: CardProps['apply'];
-}) {
-  const [busy, setBusy] = useState(false);
-  const mine = trip.riders.find((r) => r.id === me.id);
-  if (mine && mine.response !== 'in') {
-    return (
-      <div class="meetup">
-        <span class="meetup-text">Meetup suggested: {label}</span>
-      </div>
-    );
-  }
-  if (mine?.response !== 'in' || mine.pickup_spot === label) return null;
-
-  const run = async (op: () => Promise<AppState>) => {
-    setBusy(true);
-    await apply(op);
-    setBusy(false);
-  };
-  const accept = () => void run(() => setParticipation(trip.id, 'in', label));
-
-  if (mine.meetup_declined) {
-    return (
-      <div class="meetup declined">
-        <span>Meetup suggested: {label}</span>
-        {!readOnly && (
-          <button class="link" disabled={busy} onClick={accept}>
-            Accept
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div class="meetup">
-      <span class="meetup-text">Meetup suggested: {label}</span>
-      {!readOnly && (
-        <span class="btn-group">
-          <button class="primary" disabled={busy} onClick={accept}>
-            Accept
-          </button>
-          <button disabled={busy} onClick={() => void run(() => declineMeetup(trip.id))}>
-            Keep mine
-          </button>
-        </span>
-      )}
-    </div>
-  );
-}
-
 function RiderControls({ trip, me, spots, apply }: CardProps) {
   const mine = trip.riders.find((r) => r.id === me.id);
   const response = mine?.response ?? 'pending';
-  // A rider who is not in has no spot, so their select starts on the driver's
-  // meetup spot and "I'm in" joins there; a spot of the rider's own always wins.
-  const defaultSpot = mine?.pickup_spot ?? trip.meetup_label ?? '';
+  // Truthy check: a state cached before the meetup feature has no such field.
+  const meetup = trip.meetup_label || null;
+  // With a meetup everyone joins there, so there is no spot to pick.
+  const defaultSpot = meetup ?? mine?.pickup_spot ?? '';
   const [spot, setSpot] = useState(defaultSpot);
   const [suggested, setSuggested] = useState(mine?.suggested_etd ?? '');
   const [note, setNote] = useState(mine?.note ?? '');
@@ -1187,24 +1107,30 @@ function RiderControls({ trip, me, spots, apply }: CardProps) {
       <div class="row">
         <label for={`${id}-pickup`}>Pickup</label>
         <div class="field">
-          <select
-            id={`${id}-pickup`}
-            value={spot}
-            disabled={busy}
-            onChange={(e) => {
-              const v = (e.target as HTMLSelectElement).value;
-              setSpot(v);
-              // Already in? Changing the spot re-submits immediately.
-              if (response === 'in' && v !== '') void run(() => setParticipation(trip.id, 'in', v));
-            }}
-          >
-            <option value="">Pick a spot...</option>
-            {spots.map((s) => (
-              <option key={s.label} value={s.label}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+          {meetup ? (
+            <span id={`${id}-pickup`} class="meetup-spot">
+              Meetup at {meetup}
+            </span>
+          ) : (
+            <select
+              id={`${id}-pickup`}
+              value={spot}
+              disabled={busy}
+              onChange={(e) => {
+                const v = (e.target as HTMLSelectElement).value;
+                setSpot(v);
+                // Already in? Changing the spot re-submits immediately.
+                if (response === 'in' && v !== '') void run(() => setParticipation(trip.id, 'in', v));
+              }}
+            >
+              <option value="">Pick a spot...</option>
+              {spots.map((s) => (
+                <option key={s.label} value={s.label}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          )}
           <span class="btn-group">
             {response !== 'in' && (
               <button

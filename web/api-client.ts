@@ -193,10 +193,6 @@ export const setDestination = (tripId: number, destination: DestinationInput | n
     body: JSON.stringify({ destination }),
   });
 
-// An "in" rider keeps their own spot instead of the driver's meetup suggestion.
-export const declineMeetup = (tripId: number) =>
-  call(`/trips/${tripId}/meetup/decline`, { method: 'POST' });
-
 // Admin-only user management. GET returns just the user list; the writes return
 // { state, users } so the roster and the admin panel refresh together.
 export const getUsers = () => call<UsersResponse>('/users');

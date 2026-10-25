@@ -54,7 +54,6 @@ interface RiderRow {
   pickup_spot: string | null;
   suggested_etd: string | null;
   note: string | null;
-  meetup_declined: number;
 }
 
 export async function getUserByToken(db: D1Database, token: string): Promise<User | null> {
@@ -169,8 +168,7 @@ export async function buildState(
     const placeholders = tripIds.map(() => '?').join(', ');
     const riders = await db
       .prepare(
-        `SELECT p.trip_id, p.user_id, u.name, p.response, p.pickup_spot, p.suggested_etd, p.note,
-                p.meetup_declined
+        `SELECT p.trip_id, p.user_id, u.name, p.response, p.pickup_spot, p.suggested_etd, p.note
            FROM participation p JOIN users u ON u.id = p.user_id
           WHERE p.trip_id IN (${placeholders}) AND u.enabled = 1
           ORDER BY p.trip_id, u.id`,
@@ -190,18 +188,19 @@ export async function buildState(
   const spotLabels = new Set(spots.map((s) => s.label));
 
   const tripDtos: Trip[] = trips.results.map((t) => {
+    const meetup = t.meetup_label !== null && spotLabels.has(t.meetup_label) ? t.meetup_label : null;
     // A trip's driver is implicitly "in" and has no roster entry: drop their
-    // participation row from the displayed riders.
+    // participation row from the displayed riders. A live meetup is where every
+    // "in" rider gets picked up; their stored spot is kept for when it is cleared.
     const riders = (ridersByTrip.get(t.id) ?? [])
       .filter((r) => r.user_id !== t.driver_id)
       .map((r) => ({
         id: r.user_id,
         name: r.name,
         response: r.response,
-        pickup_spot: r.pickup_spot,
+        pickup_spot: r.response === 'in' && meetup !== null ? meetup : r.pickup_spot,
         suggested_etd: r.suggested_etd,
         note: r.note,
-        meetup_declined: r.meetup_declined === 1,
       }));
     const driverUser = t.driver_id === null ? undefined : userById.get(t.driver_id);
     const dest_custom = t.dest_label !== null;
@@ -231,7 +230,7 @@ export async function buildState(
       destination,
       dest_custom,
       left_at: t.left_at,
-      meetup_label: t.meetup_label !== null && spotLabels.has(t.meetup_label) ? t.meetup_label : null,
+      meetup_label: meetup,
       riders,
     };
   });

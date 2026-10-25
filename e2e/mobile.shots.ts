@@ -59,7 +59,7 @@ test('panels open', async ({ page }, testInfo) => {
   await shoot(page, testInfo, 'panels');
 });
 
-// Long names and labels, notes, suggestions, a declined meetup, a left stamp and a
+// Long names and labels, notes, suggestions, a meetup, a left stamp and a
 // cancelled trip: the content that grows the cards.
 async function busy(): Promise<void> {
   await apiCall('rider', 'PATCH', `/users/${USERS.driver.id}`, { name: 'Maximiliaan Oosterhuis' });
@@ -73,7 +73,6 @@ async function busy(): Promise<void> {
   });
   await apiCall('rider', 'POST', `/trips/${SOON}/suggestion`, { suggested_etd: '07:30' });
   await apiCall('rider', 'POST', `/trips/${SOON}/rider-note`, { note: 'Running a few minutes late' });
-  await apiCall('rider', 'POST', `/trips/${SOON}/meetup/decline`);
   await apiCall('pending', 'POST', `/trips/${SOON}/participation`, {
     response: 'in',
     pickup_spot: '@Station-Zuid-WTC',

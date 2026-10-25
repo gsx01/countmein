@@ -279,11 +279,6 @@ header.app .push {
   text-align: right;
 }
 
-.rider-meta .meetup-status {
-  font-size: 13px;
-  color: var(--muted);
-}
-
 .rider-note {
   font-size: 13px;
   color: var(--muted);
@@ -302,30 +297,9 @@ header.app .push {
   overflow-wrap: anywhere;
 }
 
-/* The driver's meetup suggestion as a rider sees it; muted once declined. */
-.meetup {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  background: var(--bg);
-  border-left: 3px solid var(--accent);
-  border-radius: 0 8px 8px 0;
-  padding: 8px 12px;
-  margin: 0 0 12px;
+.meetup-spot {
   font-size: 14px;
-}
-
-.meetup .meetup-text {
-  flex: 1 1 auto;
-}
-
-.meetup.declined {
-  background: none;
-  border-left: none;
-  padding: 0;
-  font-size: 13px;
-  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .controls {

@@ -70,7 +70,7 @@ async function requireTrip(db: D1Database, id: number) {
   return trip;
 }
 
-// POST /api/trips/:id/<action> handlers, keyed by the path after the trip id. Each validates, writes, and fires any
+// POST /api/trips/:id/<action> handlers, keyed by the action. Each validates, writes, and fires any
 // push; the router then returns the full state payload they all share. Function
 // declarations below are hoisted, so referencing them here is fine.
 type TripAction = (
@@ -92,8 +92,6 @@ const TRIP_ACTIONS: Record<string, TripAction> = {
   leaving,
   destination: (request, env, _ctx, user, tripId, now) =>
     editDestination(request, env, user, tripId, now),
-  'meetup/decline': (_request, env, _ctx, user, tripId, now) =>
-    declineMeetup(env, user, tripId, now),
 };
 
 export async function handleApi(
@@ -180,13 +178,13 @@ export async function handleApi(
       return json(await buildState(env.DB, user, now, office));
     }
 
-    // POST /api/trips/:id/<action>[/<sub>]
-    if ((parts.length === 4 || parts.length === 5) && parts[1] === 'trips' && method === 'POST') {
+    // POST /api/trips/:id/<action>
+    if (parts.length === 4 && parts[1] === 'trips' && method === 'POST') {
       const id = Number(parts[2]);
       if (!Number.isInteger(id)) throw new ApiError(400, 'invalid trip id');
       // Own-property only: a plain object would also resolve inherited keys like
       // 'toString'/'__proto__', so an unknown action must not reach a handler.
-      const action = parts.slice(3).join('/');
+      const action = parts[3];
       const handler = Object.hasOwn(TRIP_ACTIONS, action) ? TRIP_ACTIONS[action] : undefined;
       if (handler) {
         await handler(request, env, ctx, user, id, now);
@@ -451,9 +449,8 @@ async function participation(
 const TRIP_FIELDS = ['etd', 'meetup_label', 'note'];
 
 // Any of etd, meetup_label and note. Every field is validated before anything is
-// written; only the changed ones are stored, and they go out as one push. A
-// meetup change resets every rider's "keep mine", since they declined the old
-// spot; clearing the meetup is stored but adds nothing to the push.
+// written; only the changed ones are stored, and they go out as one push.
+// Clearing the meetup is stored but adds nothing to the push.
 async function editTrip(
   request: Request,
   env: Env,
@@ -497,7 +494,6 @@ async function editTrip(
     if (label !== trip.meetup_label) {
       writes.push(
         env.DB.prepare('UPDATE trips SET meetup_label = ? WHERE id = ?').bind(label, tripId),
-        env.DB.prepare('UPDATE participation SET meetup_declined = 0 WHERE trip_id = ?').bind(tripId),
       );
       if (label !== null) changes.push({ kind: 'meetup', label });
     }
@@ -769,36 +765,6 @@ async function editDestination(
     'UPDATE trips SET dest_label = ?, dest_lat = ?, dest_lng = ?, dest_place_id = ? WHERE id = ?',
   )
     .bind(dest?.label ?? null, dest?.lat ?? null, dest?.lng ?? null, dest?.place_id ?? null, tripId)
-    .run();
-}
-
-// An "in" rider keeps their own spot instead of the driver's live meetup
-// suggestion. Stored until the suggestion changes. No push.
-async function declineMeetup(env: Env, user: User, tripId: number, now: Date): Promise<void> {
-  const trip = await requireTrip(env.DB, tripId);
-  if (user.id === trip.driver_id) throw new ApiError(403, 'the trip driver does not decline');
-  if (trip.status === 'cancelled') throw new ApiError(409, 'trip cancelled');
-  if (isLocked(trip, now)) throw new ApiError(409, 'trip locked');
-  if (
-    trip.meetup_label === null ||
-    !(await isKnownSpot(env.DB, trip.meetup_label, resolveOffice(env)))
-  ) {
-    throw new ApiError(409, 'no meetup suggested');
-  }
-
-  const row = await env.DB.prepare(
-    'SELECT response FROM participation WHERE trip_id = ? AND user_id = ?',
-  )
-    .bind(tripId, user.id)
-    .first<{ response: string }>();
-  if (!row) throw new ApiError(404, 'no participation row');
-  if (row.response !== 'in') throw new ApiError(409, 'only a rider who is in can decline');
-
-  await env.DB.prepare(
-    `UPDATE participation SET meetup_declined = 1, updated_at = ?
-       WHERE trip_id = ? AND user_id = ?`,
-  )
-    .bind(now.toISOString(), tripId, user.id)
     .run();
 }
 
